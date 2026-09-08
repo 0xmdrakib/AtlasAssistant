@@ -1,5 +1,6 @@
 export type PaymentCurrency = { code: string; asset: string; network: string; label: string; minimum?: number };
-export type PaymentMinimum = { code: string; minimum: number; currency: string };
+export type PaymentMinimum = { code: string; minimum: number; currency: string; settlementCurrency?: string };
+export type PaymentRateMode = "fixed-user" | "fixed-merchant" | "floating-merchant";
 
 export type EmbeddedPayment = {
   id: string;

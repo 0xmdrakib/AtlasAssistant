@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { appUrl, subscriptionPrice } from "@/lib/paymentProviders";
-import { PaymentError, type PaymentCurrency, type PaymentMinimum } from "@/lib/payment-types";
+import { PaymentError, type PaymentCurrency, type PaymentMinimum, type PaymentRateMode } from "@/lib/payment-types";
 
 export type ProviderPayment = Record<string, unknown>;
 const BASE_URL = "https://api.nowpayments.io/v1";
@@ -86,9 +86,9 @@ export function getPaymentCurrencies(): Promise<PaymentCurrency[]> {
 const minimumCache = new Map<string, { value: PaymentMinimum; until: number }>();
 const minimumRequests = new Map<string, Promise<PaymentMinimum>>();
 
-export function getPaymentMinimum(code: string): Promise<PaymentMinimum> {
+export function getPaymentMinimum(code: string, mode: PaymentRateMode = "fixed-user"): Promise<PaymentMinimum> {
   const currency = subscriptionPrice().currency;
-  const key = `${code}:${currency}`;
+  const key = `${code}:${currency}:${mode}`;
   const cached = minimumCache.get(key);
   if (cached && cached.until > Date.now()) return Promise.resolve(cached.value);
   const pending = minimumRequests.get(key);
@@ -97,7 +97,7 @@ export function getPaymentMinimum(code: string): Promise<PaymentMinimum> {
     if (!(await getPaymentCurrencies()).some((row) => row.code === code)) throw new PaymentError("INVALID_NETWORK", "Choose an available payment network.");
     // Omitting currency_to lets NOWPayments use this merchant's configured
     // outcome wallet and routing, exactly as POST /payment does.
-    const params = new URLSearchParams({ currency_from: code, fiat_equivalent: currency, is_fixed_rate: "true", is_fee_paid_by_user: "true" });
+    const params = new URLSearchParams({ currency_from: code, fiat_equivalent: currency, is_fixed_rate: String(mode !== "floating-merchant"), is_fee_paid_by_user: String(mode === "fixed-user") });
     const data = await nowpaymentsRequest(`/min-amount?${params}`, undefined, 60);
     let minimum = Number(data.fiat_equivalent);
     if (!(Number.isFinite(minimum) && minimum > 0) && Number(data.min_amount) > 0) {
@@ -105,7 +105,7 @@ export function getPaymentMinimum(code: string): Promise<PaymentMinimum> {
       minimum = Number(estimate.estimated_amount);
     }
     if (!Number.isFinite(minimum) || minimum <= 0) throw new PaymentError("MINIMUM_UNAVAILABLE", "Unable to check this network’s minimum. Please try again.", 503);
-    const value = { code, minimum, currency };
+    const value = { code, minimum, currency, ...(typeof data.currency_to === "string" ? { settlementCurrency: data.currency_to } : {}) };
     minimumCache.set(key, { value, until: Date.now() + 60000 });
     return value;
   })().finally(() => minimumRequests.delete(key));
