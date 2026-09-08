@@ -1,15 +1,17 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useSavedItems } from "@/components/saved-provider";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Menu, Globe, Search, Check, ChevronDown, LogOut, Sparkles, Shield } from "lucide-react";
+import { Menu, Globe, Search, Check, ChevronDown, LogOut, Sparkles, Shield, Bookmark } from "lucide-react";
 import { Card, Button, Pill } from "@/components/ui";
 import { LANGUAGES, languageByCode } from "@/lib/i18n";
 import { useLanguage } from "@/components/language-provider";
 import { useTheme } from "next-themes";
 import { signIn, signOut, useSession } from "next-auth/react";
 
-const UI_CACHE_VER = "1";
+const UI_CACHE_VER = "2";
 function uiCacheKey(lang: string) {
   return `atlas:ui:${lang}:v${UI_CACHE_VER}`;
 }
@@ -41,6 +43,7 @@ function subscriptionBadge(status: BillingStatus | null, fallback: string) {
 }
 
 export function SettingsMenu() {
+  const { state: savedState, refresh: refreshSaved } = useSavedItems();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -220,7 +223,7 @@ export function SettingsMenu() {
 
   return (
     <div className="relative z-50" ref={ref}>
-      <Button variant="ghost" className="gap-2" onClick={() => setOpen((v) => !v)} aria-label={t(lang, "settings")}>
+      <Button variant="ghost" className="gap-2" onClick={() => { if (!open) void refreshSaved(); setOpen((v) => !v); }} aria-label={t(lang, "settings")} aria-expanded={open}>
         <Menu size={16} />
         <span className="hidden sm:inline">{t(lang, "settings")}</span>
       </Button>
@@ -272,6 +275,17 @@ export function SettingsMenu() {
                   Sign in
                 </Button>
               ) : null}
+            </div>
+
+            <div className="pt-2 border-t border-soft">
+              <Link
+                href="/saved"
+                onClick={() => { setOpen(false); setLangOpen(false); }}
+                className="inline-flex w-full items-center justify-between rounded-xl border border-soft bg-solid-muted px-3 py-2.5 text-sm transition focus-ring hover-subtle-2"
+              >
+                <span className="inline-flex items-center gap-2"><Bookmark size={16} /><span>{t(lang, "savedTitle")}</span></span>
+                {savedState ? <span className="text-xs tabular-nums text-muted">{savedState.count.toLocaleString(lang)} / {savedState.limit.toLocaleString(lang)}</span> : null}
+              </Link>
             </div>
 
             {/* 2) Subscription */}

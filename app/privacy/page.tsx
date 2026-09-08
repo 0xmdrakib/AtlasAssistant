@@ -19,8 +19,13 @@ export default function PrivacyPage() {
             <section>
               <h2 className="font-semibold">Information We Collect</h2>
               <p className="mt-1 text-muted">
-                When you sign in, we store basic Google account information such as your name, email address, and profile image. We also store AI usage counters, subscription status, payment session identifiers, and translation language unlocks.
+                When you sign in, we store basic Google account information such as your name, email address, and profile image. We also store AI usage counters, subscription status, payment session identifiers, translation language unlocks, and references to the posts you save.
               </p>
+            </section>
+
+            <section>
+              <h2 className="font-semibold">Saved Posts</h2>
+              <p className="mt-1 text-muted">Your saved collection is private to your account. You can remove saves at any time. Saved references are automatically removed when the original content or your account is deleted.</p>
             </section>
 
             <section>

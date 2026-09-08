@@ -42,9 +42,23 @@ model Item {
 
   // Cached per-language text for non-English mode (login-gated)
   translations ItemTranslation[]
+  savedBy      SavedItem[]
 
   @@index([section, publishedAt])
   @@index([section, score, publishedAt])
+}
+
+// References live content only. Content/account deletion immediately releases saved slots.
+model SavedItem {
+  userId    String
+  itemId    String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemId])
+  @@index([userId, createdAt])
+  @@index([itemId])
 }
 
 model IngestRun {
@@ -229,6 +243,7 @@ model User {
   aiUsages      AiUsage[]
   paymentSessions PaymentSession[]
   translationUnlocks TranslationUnlock[]
+  savedItems SavedItem[]
   discountRedemptions DiscountRedemption[]
   subscriptionPlan String @default("free")
   subscriptionStatus String @default("free")

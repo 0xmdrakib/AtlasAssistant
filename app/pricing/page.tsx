@@ -44,6 +44,7 @@ export default function PricingPage() {
                 "20 item summaries per day, reset at UTC midnight.",
                 "10 AI digest summaries per day, reset at UTC midnight.",
                 "2 non-English translation languages per paid period.",
+                "Keep up to 50 saved posts at a time (10 on Free).",
                 "Cached AI results do not consume quota.",
               ].map((item) => (
                 <div key={item} className="flex gap-3">
@@ -67,6 +68,7 @@ export default function PricingPage() {
           </Card>
 
           <div className="mt-6 grid gap-2 text-sm text-muted">
+            <p>Saved posts remain available while the original content is on Atlas. Removing a save or deleting the original post automatically frees space.</p>
             <p>For billing questions, contact 0xmdrakib@gmail.com.</p>
             <p>
               Read the{" "}

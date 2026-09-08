@@ -4,7 +4,7 @@ import * as React from "react";
 import type { LangCode } from "@/lib/i18n";
 import { t as translate, getSpeechLang, languageByCode } from "@/lib/i18n";
 
-const UI_CACHE_VER = "1";
+const UI_CACHE_VER = "2";
 function uiCacheKey(lang: string) {
   return `atlas:ui:${lang}:v${UI_CACHE_VER}`;
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { isOwnerEmail } from "@/lib/owner";
+import { isOwnerEmail } from "@/lib/owner-email";
+import type { Prisma } from "@prisma/client";
 
 export type PlanName = "free" | "paid";
 export type AiCountKind = "digest" | "summary";
@@ -34,14 +35,14 @@ function periodKey(start: Date, end: Date): string {
   return `${start.toISOString()}__${end.toISOString()}`;
 }
 
-export async function getPlanForUser(userId: string, now = new Date()): Promise<{
+export async function getPlanForUser(userId: string, now = new Date(), db: Pick<Prisma.TransactionClient, "user"> = prisma): Promise<{
   plan: PlanName;
   status: string;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
   isOwner: boolean;
 }> {
-  const u = await prisma.user.findUnique({
+  const u = await db.user.findUnique({
     where: { id: userId },
     select: {
       email: true,

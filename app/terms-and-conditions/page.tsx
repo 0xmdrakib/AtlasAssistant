@@ -45,6 +45,11 @@ export default function TermsPage() {
             </section>
 
             <section>
+              <h2 className="font-semibold">Saved Posts</h2>
+              <p className="mt-1 text-muted">Free accounts can keep 10 saved posts at a time; Pro accounts can keep 50. Saves do not extend the platform’s content retention period. Removing a save or deleting the original content frees a slot. If Pro expires, existing saves remain, but new saves require the collection to be below the current plan’s limit.</p>
+            </section>
+
+            <section>
               <h2 className="font-semibold">AI Output</h2>
               <p className="mt-1 text-muted">
                 AI summaries and translations may contain mistakes. You should verify important information from original sources before relying on it.

@@ -10,6 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:billing": "tsx --test tests/payment-providers.test.ts",
+    "test:saved": "tsx --test tests/saved-items.test.ts",
+    "db:migrate:saved": "prisma db execute --file prisma/changes/20260909_saved_items.sql --schema prisma/schema.prisma",
     "db:migrate": "prisma db push --skip-generate",
     "db:generate": "prisma generate",
     "db:seed": "node prisma/seed.mjs",

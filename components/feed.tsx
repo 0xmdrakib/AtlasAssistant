@@ -10,6 +10,7 @@ import { signIn, useSession } from "next-auth/react";
 import { useLanguage } from "@/components/language-provider";
 import { SpeakButton } from "@/components/speak-button";
 import { UpgradeModal } from "@/components/upgrade-modal";
+import { SaveButton } from "@/components/save-button";
 
 type Days = 1 | 7;
 type DigestOutput = {
@@ -481,10 +482,15 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
           return (
             <Card key={it.id} className="p-4">
               <div className="min-w-0">
-                <div className="text-xs text-muted">
-                  {it.sourceName} • collected {timeAgo(it.createdAt)} • score {it.score.toFixed(2)}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs text-muted">
+                      {it.sourceName} • collected {timeAgo(it.createdAt)} • score {it.score.toFixed(2)}
+                    </div>
+                    <div className="mt-1 text-lg font-semibold leading-snug">{it.title}</div>
+                  </div>
+                  <SaveButton itemId={it.id} />
                 </div>
-                <div className="mt-1 text-lg font-semibold leading-snug">{it.title}</div>
                 <div className="mt-2 text-sm text-muted">{it.summary}</div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
