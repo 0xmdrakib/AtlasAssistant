@@ -42,7 +42,7 @@ export function SavedContent() {
               <div className="h-full rounded-full bg-[hsl(var(--accent))] transition-all" style={{ width: `${Math.min(100, state.count / state.limit * 100)}%` }} />
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted">{state.count > state.limit ? t(lang, "savedDowngrade") : state.remaining === 0 ? t(lang, "savedLimitReached") : t(lang, "savedSlotHint")}</p>
-            {state.plan === "free" ? <Link href="/?upgrade=pro" className="mt-4 inline-flex items-center gap-1.5 text-xs text-[hsl(var(--accent))] underline underline-offset-4 focus-ring"><Sparkles size={13} />{t(lang, "savedUpgrade")}</Link> : null}
+            {state.plan === "free" ? <Link href="/pricing" className="mt-4 inline-flex items-center gap-1.5 text-xs text-[hsl(var(--accent))] underline underline-offset-4 focus-ring"><Sparkles size={13} />{t(lang, "savedUpgrade")}</Link> : null}
           </div>
         ) : null}
       </Card>

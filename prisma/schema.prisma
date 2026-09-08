@@ -124,6 +124,12 @@ model PaymentSession {
   payAmount     String?
   payCurrency   String?
   payAddress    String?
+  network       String?
+  payinExtraId  String?
+  paymentExpiresAt DateTime?
+  lastPolledAt DateTime?
+  activatedAt  DateTime?
+  requestKey   String? @unique
 
   nowpaymentsInvoiceId String?
   nowpaymentsPaymentId String? @unique

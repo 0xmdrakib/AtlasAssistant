@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import { useAppConfig } from "@/components/app-config-provider";
-import { BadgePercent, Coins, Sparkles, X } from "lucide-react";
-import { signIn, useSession } from "next-auth/react";
+import Link from "next/link";
+import { useSavedItems } from "@/components/saved-provider";
+import { ArrowRight, Sparkles, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Button, Card } from "@/components/ui";
 import { useLanguage } from "@/components/language-provider";
 
@@ -16,17 +18,6 @@ type BillingStatus = {
   limits?: { summary: number; digest: number; paidTranslationLanguages: number };
   remaining?: { summary: number; digest: number };
 };
-type AppliedDiscount = {
-  code: string;
-  percentOff: number;
-  price: {
-    amount: string;
-    currency: string;
-    discountAmount: string;
-    finalAmount: string;
-  };
-};
-
 function periodLabel(endIso?: string | null) {
   if (!endIso) return "";
   const end = new Date(endIso);
@@ -66,7 +57,8 @@ export function UpgradeModal({
   const { data: session, status } = useSession();
   const authed = status === "authenticated";
   const { lang, t } = useLanguage();
-  const [loading, setLoading] = React.useState(false);
+  const loading = false;
+  const { state: saved } = useSavedItems();
   const [error, setError] = React.useState("");
   const { price } = useAppConfig();
   const priceLabel = `${price.currency.toUpperCase()} ${price.amount} / month`;
@@ -74,14 +66,11 @@ export function UpgradeModal({
   const [usage, setUsage] = React.useState<{ account: string; value: BillingStatus } | null>(null);
   const cachedUsage = React.useRef<{ account: string; value: BillingStatus; loadedAt: number } | null>(null);
   const billingStatus = { ...(usage?.account === account ? usage.value : {}), ...session?.subscription };
-  const [discountCode, setDiscountCode] = React.useState("");
-  const [appliedDiscount, setAppliedDiscount] = React.useState<AppliedDiscount | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setError("");
-    setAppliedDiscount(null);
     if (!authed || session?.subscription?.isOwner) return;
     if (cachedUsage.current?.account === account && Date.now() - cachedUsage.current.loadedAt < 30000) {
       setUsage(cachedUsage.current);
@@ -96,7 +85,7 @@ export function UpgradeModal({
           setUsage(cachedUsage.current);
         }
       } catch {
-        // Keep the built-in defaults.
+        if (!cancelled) setError("Usage is temporarily unavailable. Close and reopen to try again.");
       }
     })();
     return () => {
@@ -112,90 +101,6 @@ export function UpgradeModal({
   const activePeriod = periodLabel(billingStatus?.currentPeriodEnd);
   const planLabel = ownerActive ? "Owner" : paidActive ? "Pro" : "Free";
   const statusLabel = ownerActive ? "Owner access" : prettyStatus(billingStatus?.status);
-  const displayPrice = appliedDiscount
-    ? `${appliedDiscount.price.currency.toUpperCase()} ${appliedDiscount.price.finalAmount} / month`
-    : priceLabel;
-
-  async function startCheckout() {
-    setError("");
-    if (!authed) {
-      signIn("google");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/billing/checkout/crypto", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discountCode: appliedDiscount?.code || undefined }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.url) throw new Error(data?.error || "Checkout failed");
-      window.location.href = String(data.url);
-    } catch (e: any) {
-      setError(e?.message || "Checkout failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function applyDiscount() {
-    setError("");
-    if (!authed) {
-      signIn("google");
-      return;
-    }
-
-    const code = discountCode.trim();
-    if (!code) {
-      setError("Enter a discount code");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/billing/discount", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Invalid discount code");
-      setAppliedDiscount(data);
-      setDiscountCode(data.code || code);
-    } catch (e: any) {
-      setAppliedDiscount(null);
-      setError(e?.message || "Invalid discount code");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function activateFreeDiscount() {
-    setError("");
-    if (!authed) {
-      signIn("google");
-      return;
-    }
-    if (!appliedDiscount || appliedDiscount.percentOff < 100) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/billing/checkout/free", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discountCode: appliedDiscount.code }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "Free activation failed");
-      window.location.href = "/?billing=success";
-    } catch (e: any) {
-      setError(e?.message || "Free activation failed");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   return (
     <div
@@ -204,7 +109,7 @@ export function UpgradeModal({
         if (event.target === event.currentTarget && !loading) onClose();
       }}
     >
-      <Card className="w-full max-w-md border-[hsl(var(--border))] bg-solid-surface p-5 shadow-2xl">
+      <Card role="dialog" aria-modal="true" aria-label="Subscription and limits" className="w-full max-w-md border-[hsl(var(--border))] bg-solid-surface p-5 shadow-2xl">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-soft bg-subtle-2">
             <Sparkles size={18} className="text-[hsl(var(--accent))]" />
@@ -220,7 +125,7 @@ export function UpgradeModal({
                   ? activePeriod || "Your Pro subscription is active."
                   : reason || t(lang, "upgradeBody")}
             </div>
-            {!active ? <div className="mt-2 text-sm font-medium">{displayPrice}</div> : null}
+            {!active ? <div className="mt-2 text-sm font-medium">{priceLabel}</div> : null}
           </div>
         </div>
 
@@ -267,52 +172,13 @@ export function UpgradeModal({
           </div>
         ) : null}
 
-        {active ? null : (
-          <div className="mt-5 grid gap-3">
-            <div className="rounded-xl border border-soft bg-solid-muted p-3">
-              <div className="flex items-center gap-2">
-                <BadgePercent size={16} className="text-muted" />
-                <input
-                  value={discountCode}
-                  onChange={(e) => {
-                    setDiscountCode(e.target.value.toUpperCase());
-                    setAppliedDiscount(null);
-                  }}
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
-                  placeholder="Discount code"
-                />
-                <button
-                  type="button"
-                  onClick={applyDiscount}
-                  disabled={Boolean(loading)}
-                  className="rounded-lg border border-soft bg-solid-surface px-2 py-1 text-xs transition hover-subtle-2 disabled:opacity-60"
-                >
-                  Apply
-                </button>
-              </div>
-              {appliedDiscount ? (
-                <div className="mt-2 text-xs text-muted">
-                  {appliedDiscount.percentOff}% off applied. You pay {appliedDiscount.price.currency.toUpperCase()}{" "}
-                  {appliedDiscount.price.finalAmount}.
-                </div>
-              ) : null}
-            </div>
-
-            {appliedDiscount?.percentOff === 100 ? (
-              <Button className="gap-2" onClick={activateFreeDiscount} disabled={Boolean(loading)}>
-                <Sparkles size={16} />
-                {loading ? t(lang, "starting") : "Activate free Pro"}
-              </Button>
-            ) : (
-              <div className="grid gap-2">
-                <Button className="gap-2" onClick={startCheckout} disabled={loading}>
-                  <Coins size={16} />
-                  {loading ? t(lang, "starting") : t(lang, "payCrypto")}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+        {authed ? <div className="mt-3 flex items-center justify-between rounded-xl border border-soft bg-solid-muted p-3 text-sm">
+          <span className="text-muted">{t(lang, "savedTitle")}</span>
+          <span>{saved ? `${saved.count} / ${saved.limit}` : "…"}</span>
+        </div> : null}
+        <Link href="/pricing" onClick={onClose} className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-4 py-3 text-sm font-medium text-black focus-ring">
+          {active ? "View plan details" : "View plans & subscribe"}<ArrowRight size={16} />
+        </Link>
 
         <div className="mt-4 flex justify-end">
           <Button variant="ghost" onClick={onClose} disabled={Boolean(loading)} aria-label={t(lang, "notNow")}>

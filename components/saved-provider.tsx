@@ -193,7 +193,7 @@ function SavedStore({ authenticated, identity, onChange }: {
               <p role={notice.error ? "alert" : "status"} className="text-sm">{t(lang, notice.key)}</p>
               <div className="mt-2 flex flex-wrap gap-4 text-xs">
                 <Link href="/saved" onClick={() => setNotice(null)} className="inline-flex items-center gap-1.5 underline underline-offset-4 focus-ring"><Bookmark size={13} />{t(lang, "savedTitle")}</Link>
-                {notice.limit && state?.plan === "free" ? <Link href="/?upgrade=pro" onClick={() => setNotice(null)} className="underline underline-offset-4 focus-ring">{t(lang, "savedUpgrade")}</Link> : null}
+                {notice.limit && state?.plan === "free" ? <Link href="/pricing" onClick={() => setNotice(null)} className="underline underline-offset-4 focus-ring">{t(lang, "savedUpgrade")}</Link> : null}
               </div>
             </div>
             <button type="button" onClick={() => setNotice(null)} aria-label={t(lang, "savedDismiss")} className="rounded-lg p-1 text-muted hover-subtle focus-ring"><X size={16} /></button>

@@ -22,7 +22,7 @@ export function nextUtcResetIso(d = new Date()): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
 }
 
-function addOneMonth(d: Date): Date {
+export function addOneMonth(d: Date): Date {
   const out = new Date(d.getTime());
   const day = out.getUTCDate();
   out.setUTCDate(1);

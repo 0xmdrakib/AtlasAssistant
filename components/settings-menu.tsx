@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { UpgradeModal } from "@/components/upgrade-modal";
 import { useAppConfig } from "@/components/app-config-provider";
 import { useSavedItems } from "@/components/saved-provider";
-import { usePathname, useSearchParams } from "next/navigation";
 import { Menu, Globe, Search, Check, ChevronDown, LogOut, Sparkles, Shield, Bookmark } from "lucide-react";
 import { Card, Button, Pill } from "@/components/ui";
 import { LANGUAGES, languageByCode } from "@/lib/i18n";
@@ -45,8 +45,6 @@ function subscriptionBadge(status: BillingStatus | null, fallback: string) {
 
 export function SettingsMenu() {
   const { state: savedState } = useSavedItems();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { lang, setLang, t } = useLanguage();
   const { theme, setTheme } = useTheme();
   const { data: session, status } = useSession();
@@ -54,6 +52,8 @@ export function SettingsMenu() {
   const loading = status === "loading";
 
   const [open, setOpen] = React.useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = React.useState(false);
+  const [subscriptionReason, setSubscriptionReason] = React.useState("");
   const [langOpen, setLangOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const { price } = useAppConfig();
@@ -68,26 +68,12 @@ export function SettingsMenu() {
 
   const current = languageByCode(lang) ?? { code: lang, label: lang, nativeLabel: lang, speechLang: lang };
 
-  const openUpgradePage = React.useCallback(
-    (reason?: string) => {
-      setOpen(false);
-      setLangOpen(false);
-
-      if (reason) {
-        try {
-          sessionStorage.setItem("atlas:upgradeReason", reason);
-        } catch {
-          // ignore
-        }
-      }
-
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("upgrade", "pro");
-      // This flag only opens a client panel; changing it needs no server navigation.
-      window.history.replaceState(null, "", `${pathname}?${params.toString()}${window.location.hash}`);
-    },
-    [pathname, searchParams]
-  );
+  const openUpgradePage = React.useCallback((reason?: string) => {
+    setOpen(false);
+    setLangOpen(false);
+    setSubscriptionReason(reason || "");
+    setSubscriptionOpen(true);
+  }, []);
 
   const prefetchUiTranslations = React.useCallback(async (target: string) => {
     // en & bn are bundled; others are fetched once and cached in localStorage.
@@ -195,6 +181,7 @@ export function SettingsMenu() {
 
   return (
     <div className="relative z-50" ref={ref}>
+      <UpgradeModal open={subscriptionOpen} reason={subscriptionReason} onClose={() => setSubscriptionOpen(false)} />
       <Button variant="ghost" className="gap-2" onClick={() => setOpen((v) => !v)} aria-label={t(lang, "settings")} aria-expanded={open}>
         <Menu size={16} />
         <span className="hidden sm:inline">{t(lang, "settings")}</span>
