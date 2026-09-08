@@ -1,4 +1,5 @@
 import { Receiver } from "@upstash/qstash";
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ingestOnce } from "@/lib/ingest";
@@ -17,6 +18,7 @@ export const maxDuration = 60;
 const AI_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 async function cleanupAiCachesAfterIngest() {
+  revalidateTag("atlas-feed");
   const cutoff = new Date(Date.now() - AI_CACHE_TTL_MS);
   await prisma.digest.deleteMany({ where: { createdAt: { lt: cutoff } } }).catch(() => null);
   await prisma.itemTranslation

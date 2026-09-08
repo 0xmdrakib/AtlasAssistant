@@ -427,6 +427,9 @@ const DICT: Dict = {
     speak: "Speak",
     stop: "Stop",
 
+    refreshFeed: "Refresh feed",
+    feedLoading: "Loading feed…",
+    feedLoadError: "Could not refresh the feed. Tap refresh to try again.",
     tabGlobal: "Global news",
     tabTech: "Tech news",
     tabInnovators: "Innovators",
@@ -434,7 +437,6 @@ const DICT: Dict = {
     tabCreators: "Great creators",
     tabUniverse: "Universe",
     tabHistory: "History",
-    tabFaith: "Faith",
 
     searchLanguage: "Search language…",
     noResults: "No results.",
@@ -515,6 +517,9 @@ const DICT: Dict = {
     speak: "শুনুন",
     stop: "থামান",
 
+    refreshFeed: "ফিড রিফ্রেশ করুন",
+    feedLoading: "ফিড লোড হচ্ছে…",
+    feedLoadError: "ফিড লোড করা যায়নি। রিফ্রেশ করে আবার চেষ্টা করুন।",
     tabGlobal: "গ্লোবাল নিউজ",
     tabTech: "টেক নিউজ",
     tabInnovators: "ইনোভেটরস",
@@ -522,7 +527,6 @@ const DICT: Dict = {
     tabCreators: "গ্রেট ক্রিয়েটরস",
     tabUniverse: "মহাবিশ্ব",
     tabHistory: "ইতিহাস",
-    tabFaith: "ঈমান",
 
     searchLanguage: "ল্যাঙ্গুয়েজ সার্চ…",
     noResults: "কিছুই পাওয়া যায়নি।",

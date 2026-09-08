@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { revalidateTag } from "next/cache";
 import { requireOwnerSession } from "@/lib/owner";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
     };
   });
 
+  revalidateTag("atlas-feed");
   return Response.json({
     ok: true,
     mode,

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isOwnerEmail } from "@/lib/owner-email";
 import type { Prisma, User } from "@prisma/client";
+import type { AccountSubscription } from "@/lib/app-config";
 
 export type PlanName = "free" | "paid";
 export type AiCountKind = "digest" | "summary";
@@ -84,9 +85,15 @@ export function limitsForPlan(plan: PlanName) {
   return plan === "paid" ? PAID_LIMITS : FREE_LIMITS;
 }
 
-export async function getBillingStatus(userId: string) {
+export async function getBillingStatus(userId: string, sessionSubscription?: AccountSubscription) {
   const now = new Date();
-  const planInfo = await getPlanForUser(userId, now);
+  // Only server-created session metadata is passed here. Quota mutations still
+  // read and enforce the current subscription independently in their transaction.
+  const planInfo = sessionSubscription ? {
+    ...sessionSubscription,
+    currentPeriodStart: sessionSubscription.currentPeriodStart ? new Date(sessionSubscription.currentPeriodStart) : null,
+    currentPeriodEnd: sessionSubscription.currentPeriodEnd ? new Date(sessionSubscription.currentPeriodEnd) : null,
+  } : await getPlanForUser(userId, now);
   const day = todayUtcKey(now);
   const usage = await prisma.aiUsage
     .findUnique({ where: { userId_day: { userId, day } } })

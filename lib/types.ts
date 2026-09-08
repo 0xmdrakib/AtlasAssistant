@@ -1,12 +1,5 @@
-export type Section =
-  | "global"
-  | "tech"
-  | "innovators"
-  | "early"
-  | "creators"
-  | "universe"
-  | "history"
-  | "faith";
+export const SECTIONS = ["global", "tech", "innovators", "early", "creators", "universe", "history"] as const;
+export type Section = typeof SECTIONS[number];
 
 export type ContentItem = {
   id: string;

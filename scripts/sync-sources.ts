@@ -75,7 +75,6 @@ function looksLowQuality(url: string): boolean {
 function mapSectionFromFileName(fileBase: string, fallback: Section): Section {
   const n = fileBase.toLowerCase();
   if (/(space|astronomy|cosmo|planet|nasa|esa|physics|science)/.test(n)) return "universe";
-  if (/(quran|hadith|sunnah|fiqh|islam|religion|faith)/.test(n)) return "faith";
   if (/(history|heritage|museum|ancient)/.test(n)) return "history";
   if (/(signals|patent|filing|preprint|arxiv)/.test(n)) return "early";
   if (/(security|cyber|privacy|vulnerability|infosec|programming|developer|software|tech)/.test(n)) return "tech";
@@ -247,6 +246,8 @@ async function main() {
           const files = await githubListOpmlFiles(prov.repo, dir.path, branch);
           for (const f of files) {
             if (candidates.length >= max) break;
+            // Skip retired religious feed packs instead of assigning them to Global.
+            if (/(quran|hadith|sunnah|fiqh|religion|faith)/i.test(f.name)) continue;
             try {
               const xml = await fetchText(f.downloadUrl);
               const base = decodeURIComponent(f.name.replace(/\.opml$/i, "")).trim();

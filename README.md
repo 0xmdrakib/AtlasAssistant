@@ -18,7 +18,6 @@ Atlas Assistant is a calm, high‑signal news portal that turns chaos into clari
 - Great Creators
 - Universe
 - History
-- Faith
 
 ### Filters that actually help
 Pick a **Country** + **Topic** + **time window (1d / 7d)** and Atlas curates the feed using **scoring + caps** (so you don’t get a junk flood).

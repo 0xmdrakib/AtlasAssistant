@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { revalidateTag } from "next/cache";
 import { Receiver } from "@upstash/qstash";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ async function runCleanup() {
 
   // Enforce DB retention: delete items older than 7 days.
   const itemsDeleted = await prisma.item.deleteMany({ where: { createdAt: { lt: itemsCutoff } } });
+  revalidateTag("atlas-feed");
 
   return {
     digestsDeleted: digestsDeleted.count,

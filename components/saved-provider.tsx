@@ -22,15 +22,29 @@ type SavedContextValue = {
 };
 const SavedContext = React.createContext<SavedContextValue | null>(null);
 const SYNC_KEY = "atlas:saved:changed";
+const EMPTY_SAVED_CONTEXT: SavedContextValue = {
+  state: null, loading: true, error: false, pending: new Set(),
+  refresh: async () => null, isSaved: () => false, toggle: async () => {},
+};
+type SavedStoreSnapshot = { identity: string; value: SavedContextValue };
 
 export function SavedItemsProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const identity = status === "authenticated" ? (session?.user?.email || "authenticated") : status;
-  // Reset private data and pending work immediately when the account changes.
-  return <SavedStore key={identity} authenticated={status === "authenticated"}>{children}</SavedStore>;
+  const [snapshot, setSnapshot] = React.useState<SavedStoreSnapshot | null>(null);
+  // Reset only the private controller. Keeping children mounted preserves the feed
+  // and playback when the initial session resolves or the account changes.
+  return <>
+    <SavedStore key={identity} identity={identity} authenticated={status === "authenticated"} onChange={setSnapshot} />
+    <SavedContext.Provider value={snapshot?.identity === identity ? snapshot.value : EMPTY_SAVED_CONTEXT}>
+      {children}
+    </SavedContext.Provider>
+  </>;
 }
 
-function SavedStore({ authenticated, children }: { authenticated: boolean; children: React.ReactNode }) {
+function SavedStore({ authenticated, identity, onChange }: {
+  authenticated: boolean; identity: string; onChange: (snapshot: SavedStoreSnapshot) => void;
+}) {
   const { lang, t } = useLanguage();
   const [state, setState] = React.useState<SavedState | null>(null);
   const stateRef = React.useRef<SavedState | null>(null);
@@ -163,12 +177,14 @@ function SavedStore({ authenticated, children }: { authenticated: boolean; child
     await work;
   }, [authenticated, publish, refresh]);
 
-  const isSaved = (itemId: string) => pendingRef.current.get(itemId)?.saved
-    ?? state?.bookmarks.some((row) => row.itemId === itemId) ?? false;
+  const isSaved = React.useCallback((itemId: string) => pendingRef.current.get(itemId)?.saved
+    ?? state?.bookmarks.some((row) => row.itemId === itemId) ?? false, [state]);
+  const value = React.useMemo(() => ({ state, loading, error, pending, isSaved, refresh, toggle }),
+    [state, loading, error, pending, isSaved, refresh, toggle]);
+  React.useEffect(() => { onChange({ identity, value }); }, [identity, value, onChange]);
 
   return (
-    <SavedContext.Provider value={{ state, loading, error, pending, isSaved, refresh, toggle }}>
-      {children}
+    <>
       {notice ? (
         <Card className="fixed bottom-5 left-1/2 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 border-[hsl(var(--border))] bg-solid-surface p-4 shadow-2xl">
           <div className="flex items-start gap-3">
@@ -184,7 +200,7 @@ function SavedStore({ authenticated, children }: { authenticated: boolean; child
           </div>
         </Card>
       ) : null}
-    </SavedContext.Provider>
+    </>
   );
 }
 

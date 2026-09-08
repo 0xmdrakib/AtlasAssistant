@@ -10,6 +10,7 @@ function uiCacheKey(lang: string) {
 }
 
 type LanguageState = {
+  ready: boolean;
   lang: LangCode;
   setLang: (lang: LangCode) => void;
   // We wrap the built-in dictionary with optional dynamically-fetched UI strings.
@@ -22,6 +23,7 @@ const LanguageContext = React.createContext<LanguageState | null>(null);
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Match the server's first render, then restore the browser preference after hydration.
   const [lang, setLangState] = React.useState<LangCode>("en");
+  const [ready, setReady] = React.useState(false);
   const [uiDict, setUiDict] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
@@ -31,6 +33,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       setLangState(languageByCode(candidate) ? candidate : "en");
     } catch {
       // English remains available when browser storage is disabled.
+    } finally {
+      setReady(true);
     }
   }, []);
 
@@ -93,6 +97,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const value = React.useMemo<LanguageState>(() => {
     return {
       lang,
+      ready,
       setLang,
       t: (l, key) => {
         const fromDynamic = uiDict?.[String(key)];
@@ -100,7 +105,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       },
       speechLang: getSpeechLang(lang),
     };
-  }, [lang, setLang, uiDict]);
+  }, [lang, ready, setLang, uiDict]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

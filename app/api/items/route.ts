@@ -6,7 +6,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { ensureTranslationEntitlement } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
-import type { Section } from "@/lib/types";
+import { SECTIONS, type Section } from "@/lib/types";
+import { getPublicFeed, queryPublicFeed } from "@/lib/public-feed";
 import { resolveUserIdFromSession } from "@/lib/sessionUser";
 import { isTranslateEnabled, translateItemBatch } from "@/lib/translateProvider";
 
@@ -19,16 +20,7 @@ function translateSingleFlightMap(): Map<string, Promise<void>> {
 }
 
 
-const ALLOWED_SECTIONS = new Set<Section>([
-  "global",
-  "tech",
-  "innovators",
-  "early",
-  "creators",
-  "universe",
-  "history",
-  "faith",
-]);
+const ALLOWED_SECTIONS = new Set<Section>(SECTIONS);
 
 function normalizeSection(input: string | null): Section | null {
   if (!input) return null;
@@ -41,56 +33,20 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const lang = (url.searchParams.get("lang") || "en").trim().toLowerCase();
   const section = normalizeSection(url.searchParams.get("section"));
-  const days = Math.max(1, Math.min(30, Number(url.searchParams.get("days") || "7")));
-
-  const afterDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-  const where: any = {
-    createdAt: { gte: afterDate },
-    // AI discovery is disabled: never return AI/discovery sources via the feed API.
-    source: { type: { notIn: ["ai", "discovery"] } },
-  };
-  if (section) where.section = section;
-
-  const raw = await prisma.item.findMany({
-    where,
-    // UI label is "collected X ago" (createdAt). Sort by createdAt so newer
-    // collected items always appear at the top.
-    orderBy: [{ createdAt: "desc" }, { score: "desc" }],
-    take: 250,
-    select: {
-      id: true,
-      section: true,
-      title: true,
-      summary: true,
-      aiSummary: true,
-      url: true,
-      country: true,
-      topics: true,
-      score: true,
-      publishedAt: true,
-      createdAt: true,
-      source: {
-        select: { id: true, name: true, type: true },
-      },
-    },
-  });
-
-  // Shape items for the client (avoid nested objects and always include arrays).
-  const items = raw.map((it) => ({
-    id: it.id,
-    section: it.section as Section,
-    title: it.title,
-    summary: it.summary,
-    aiSummary: it.aiSummary ?? undefined,
-    sourceName: it.source?.name || "Unknown",
-    url: it.url,
-    country: it.country ?? undefined,
-    topics: Array.isArray(it.topics) ? it.topics : [],
-    publishedAt: it.publishedAt instanceof Date ? it.publishedAt.toISOString() : String(it.publishedAt),
-    createdAt: it.createdAt instanceof Date ? it.createdAt.toISOString() : String(it.createdAt),
-    score: typeof it.score === "number" ? it.score : Number(it.score || 0),
-  }));
+  if (url.searchParams.has("section") && !section) {
+    return Response.json({ error: "Unknown section" }, { status: 400 });
+  }
+  const rawDays = Number(url.searchParams.get("days") || "1");
+  const days = Number.isFinite(rawDays) ? Math.max(1, Math.min(30, Math.floor(rawDays))) : 1;
+  const fresh = url.searchParams.get("fresh") === "1";
+  const payload = await (fresh ? queryPublicFeed : getPublicFeed)(section, days);
+  if (lang === "en") {
+    return Response.json(payload, { headers: fresh ? { "Cache-Control": "no-store" } : {
+      "Cache-Control": "public, max-age=0, s-maxage=30, stale-while-revalidate=30",
+      "Vercel-CDN-Cache-Control": "public, s-maxage=30, stale-while-revalidate=30",
+    } });
+  }
+  const items = payload.items;
 
   async function attachAiSummaries(list: typeof items, lang: string) {
     const ids = list.map((i) => i.id);
@@ -213,7 +169,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const withAi = await attachAiSummaries(items, translationAllowed ? lang : "en");
+  const withAi = items;
 
   return Response.json({
     items: withAi,

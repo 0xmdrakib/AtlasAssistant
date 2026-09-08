@@ -16,7 +16,6 @@ const ALLOWED_SECTIONS = new Set<Section>([
   "creators",
   "universe",
   "history",
-  "faith",
 ]);
 
 type Kind = "feed" | "ai";
@@ -87,7 +86,10 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const secRaw = String(body?.section || "global").toLowerCase();
-  const section = (ALLOWED_SECTIONS.has(secRaw as Section) ? secRaw : "global") as Section;
+  if (!ALLOWED_SECTIONS.has(secRaw as Section)) {
+    return Response.json({ error: "Unknown section" }, { status: 400 });
+  }
+  const section = secRaw as Section;
   const kind = normalizeKind(body?.kind);
   const days = normalizeDays(Number(body?.days || 1));
   const country = body?.country ? String(body.country).toUpperCase() : null;

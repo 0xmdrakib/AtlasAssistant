@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useAppConfig } from "@/components/app-config-provider";
 import { BadgePercent, Coins, Sparkles, X } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { Button, Card } from "@/components/ui";
@@ -62,13 +63,16 @@ export function UpgradeModal({
   reason?: string;
   onClose: () => void;
 }) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const authed = status === "authenticated";
   const { lang, t } = useLanguage();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [priceLabel, setPriceLabel] = React.useState("$2.99 / month");
-  const [billingStatus, setBillingStatus] = React.useState<BillingStatus | null>(null);
+  const { price } = useAppConfig();
+  const priceLabel = `${price.currency.toUpperCase()} ${price.amount} / month`;
+  const account = session?.user?.email || status;
+  const [usage, setUsage] = React.useState<{ account: string; value: BillingStatus } | null>(null);
+  const billingStatus = { ...(usage?.account === account ? usage.value : {}), ...session?.subscription };
   const [discountCode, setDiscountCode] = React.useState("");
   const [appliedDiscount, setAppliedDiscount] = React.useState<AppliedDiscount | null>(null);
 
@@ -79,21 +83,9 @@ export function UpgradeModal({
     setAppliedDiscount(null);
     (async () => {
       try {
-        const [configRes, statusRes] = await Promise.all([
-          fetch("/api/billing/config", { cache: "no-store" }),
-          fetch("/api/billing/status", { cache: "no-store" }),
-        ]);
-        const data = await configRes.json().catch(() => null);
-        const statusData = await statusRes.json().catch(() => null);
-        if (cancelled) return;
-
-        if (data?.ok) {
-          const amount = data?.price?.amount ? String(data.price.amount) : "2.99";
-          const currency = data?.price?.currency ? String(data.price.currency).toUpperCase() : "USD";
-          setPriceLabel(`${currency} ${amount} / month`);
-        }
-
-        if (statusData?.ok) setBillingStatus(statusData);
+        const statusRes = await fetch("/api/billing/status", { cache: "no-store" });
+        const statusData = await statusRes.json();
+        if (!cancelled && statusRes.ok && statusData?.ok) setUsage({ account, value: statusData });
       } catch {
         // Keep the built-in defaults.
       }
@@ -101,7 +93,7 @@ export function UpgradeModal({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, account]);
 
   if (!open) return null;
 
@@ -250,13 +242,13 @@ export function UpgradeModal({
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted">{t(lang, "itemSummary")}</span>
                   <span className="font-medium">
-                    {billingStatus?.remaining?.summary ?? 0}/{billingStatus?.limits?.summary ?? 20} today
+                    {billingStatus?.remaining ? `${billingStatus.remaining.summary}/${billingStatus.limits?.summary} today` : "…"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted">{t(lang, "digestTitle")}</span>
                   <span className="font-medium">
-                    {billingStatus?.remaining?.digest ?? 0}/{billingStatus?.limits?.digest ?? 10} today
+                    {billingStatus?.remaining ? `${billingStatus.remaining.digest}/${billingStatus.limits?.digest} today` : "…"}
                   </span>
                 </div>
                 <div className="text-xs text-muted">Daily limits reset at UTC midnight.</div>

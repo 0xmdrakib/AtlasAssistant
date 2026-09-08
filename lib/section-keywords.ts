@@ -160,27 +160,6 @@ export const SECTION_KEYWORDS: Record<Section, SectionKeywordSet> = {
     description:
       "History: Islamic history, ancient empires, archaeological discoveries, historical trade routes, preserved manuscripts, and heritage sites. Focus on events and discoveries from the past that deepen understanding of civilizations.",
   },
-  faith: {
-    include: [
-      "quran", "surah", "ayat", "ayah", "tafsir", "tajweed",
-      "hadith", "sahih", "bukhari", "muslim", "sunan", "riyad",
-      "fiqh", "fatwa", "madhhab", "sharia", "halal", "haram",
-      "spiritual", "tazkiyah", "dua", "dhikr", "ibadah",
-      "ethic", "akhlaq", "character", "morality",
-      "ramadan", "hajj", "umrah", "eid", "fasting", "prayer",
-      "mosque", "imam", "scholar", "islamic",
-      "charity", "zakat", "sadaqah",
-      "monotheism", "tawheed", "belief",
-    ],
-    exclude: [
-      "celebrity", "gossip", "recipe", "fashion", "dating",
-      "horoscope", "astrology", "lottery",
-      "sports", "movie", "tv show", "music album",
-      "war", "missile", "conflict", "politics",
-    ],
-    description:
-      "Faith: Quran, hadith, fiqh, spirituality, ethics, Islamic practice, and scholarship. Focus on religious knowledge, spiritual growth, and moral guidance. Exclude politics, entertainment, and celebrity news.",
-  },
 };
 
 export function getSectionDescription(section: Section): string {

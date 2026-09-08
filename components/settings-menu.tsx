@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useAppConfig } from "@/components/app-config-provider";
 import { useSavedItems } from "@/components/saved-provider";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu, Globe, Search, Check, ChevronDown, LogOut, Sparkles, Shield, Bookmark } from "lucide-react";
@@ -43,7 +44,7 @@ function subscriptionBadge(status: BillingStatus | null, fallback: string) {
 }
 
 export function SettingsMenu() {
-  const { state: savedState, refresh: refreshSaved } = useSavedItems();
+  const { state: savedState } = useSavedItems();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,9 +57,10 @@ export function SettingsMenu() {
   const [open, setOpen] = React.useState(false);
   const [langOpen, setLangOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [billingPlan, setBillingPlan] = React.useState<"free" | "paid" | null>(null);
-  const [billingStatus, setBillingStatus] = React.useState<BillingStatus | null>(null);
-  const [subscriptionPriceLabel, setSubscriptionPriceLabel] = React.useState("$2.99/mo");
+  const { price } = useAppConfig();
+  const billingStatus = session?.subscription || null;
+  const billingPlan = billingStatus?.plan;
+  const subscriptionPriceLabel = `${price.currency.toUpperCase()} ${price.amount}/mo`;
   const ref = React.useRef<HTMLDivElement | null>(null);
   const langBtnRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -155,36 +157,6 @@ export function SettingsMenu() {
     if (!open) setLangOpen(false);
   }, [open]);
 
-  React.useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const [statusRes, configRes] = await Promise.all([
-          fetch("/api/billing/status", { cache: "no-store" }),
-          fetch("/api/billing/config", { cache: "no-store" }),
-        ]);
-        const statusData = await statusRes.json().catch(() => null);
-        const configData = await configRes.json().catch(() => null);
-        if (cancelled) return;
-        if (statusData?.ok) {
-          setBillingPlan(statusData?.plan === "paid" ? "paid" : "free");
-          setBillingStatus(statusData);
-        }
-        if (configData?.ok && configData?.price?.amount) {
-          const amount = String(configData.price.amount);
-          const currency = String(configData.price.currency || "usd").toUpperCase();
-          setSubscriptionPriceLabel(`${currency} ${amount}/mo`);
-        }
-      } catch {
-        if (!cancelled) setBillingPlan(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
   const computeLangPlacement = React.useCallback(() => {
     const el = langBtnRef.current;
     if (!el) return;
@@ -223,7 +195,7 @@ export function SettingsMenu() {
 
   return (
     <div className="relative z-50" ref={ref}>
-      <Button variant="ghost" className="gap-2" onClick={() => { if (!open) void refreshSaved(); setOpen((v) => !v); }} aria-label={t(lang, "settings")} aria-expanded={open}>
+      <Button variant="ghost" className="gap-2" onClick={() => setOpen((v) => !v)} aria-label={t(lang, "settings")} aria-expanded={open}>
         <Menu size={16} />
         <span className="hidden sm:inline">{t(lang, "settings")}</span>
       </Button>
@@ -301,7 +273,7 @@ export function SettingsMenu() {
                   <span>{t(lang, "subscription")}</span>
                 </span>
                 <span className="text-xs text-muted">
-                  {subscriptionBadge(billingStatus, billingPlan === "paid" ? t(lang, "proActive") : subscriptionPriceLabel)}
+                  {loading ? "…" : subscriptionBadge(billingStatus, billingPlan === "paid" ? t(lang, "proActive") : subscriptionPriceLabel)}
                 </span>
               </button>
             </div>

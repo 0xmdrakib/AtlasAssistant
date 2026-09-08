@@ -24,6 +24,6 @@ export async function GET() {
   const userId = await resolveUserIdFromSession(session);
   if (!userId) return Response.json({ ok: false, error: "User id missing" }, { status: 401 });
 
-  const status = await getBillingStatus(userId);
+  const status = await getBillingStatus(userId, session.subscription);
   return Response.json({ ok: true, authed: true, ...status }, { headers: { "Cache-Control": "no-store" } });
 }

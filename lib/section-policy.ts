@@ -137,20 +137,4 @@ export const SECTION_POLICIES: Record<Section, SectionPolicy> = {
       { keyword: "dynasty", boost: 0.04 },
     ],
   },
-  faith: {
-    perRunCap: 2,
-    dailyCap: DEFAULTS.dailyCap,
-    weeklyCap: DEFAULTS.weeklyCap,
-    monthlyCap: DEFAULTS.weeklyCap,
-    retentionDays: 7,
-    recencyHalfLifeHours: 72,
-    minTrustScore: 55,
-    keywordBoosts: [
-      { keyword: "quran", boost: 0.08 },
-      { keyword: "hadith", boost: 0.06 },
-      { keyword: "sunnah", boost: 0.06 },
-      { keyword: "fiqh", boost: 0.06 },
-      { keyword: "dua", boost: 0.04 },
-    ],
-  },
 };

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 
-
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const base = process.env.UI_TEST_BASE || 'http://127.0.0.1:3000';
@@ -30,7 +29,7 @@ try {
   await context.route('**/api/**', async (route) => {
     const req = route.request(); const url = new URL(req.url());
     if (url.pathname === '/api/auth/session') return json(route, { user: { id: 'ui-fixture', name: 'UI Test', email: 'ui-test@example.test' }, expires: '2099-01-01T00:00:00.000Z' });
-    if (url.pathname === '/api/items') return json(route, { items: stories, meta: {} });
+    if (url.pathname === '/api/items') return json(route, { items: stories, meta: { updatedAt: new Date().toISOString(), translateEnabled: false, translationAllowed: true } });
     if (url.pathname === '/api/saved') { gets++; return json(route, full()); }
     if (url.pathname.startsWith('/api/saved/')) {
       assert.equal(url.searchParams.get('compact'), '1');
@@ -53,6 +52,9 @@ try {
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}/tech`, { waitUntil: 'networkidle' });
+  // Also exercises the API fixture when testing a deployment with server-rendered posts.
+  await page.getByRole('button', { name: 'Refresh feed', exact: true }).click();
+  await page.getByText('Story A', { exact: true }).waitFor();
   const card = (id) => page.locator('div.rounded-2xl').filter({ has: page.getByText(`Story ${id}`, { exact: true }) }).last();
   assert.equal(await page.getByRole('button', { name: 'Speak', exact: true }).count(), 3, 'Speaker is present on every feed post');
   const initialGets = gets;
@@ -108,4 +110,3 @@ try {
   assert.deepEqual(errors, []);
   console.log(`PASS: save feedback in ${immediateMs}ms while response withheld; no full-list reload on success; failed remove rolls back without losing another save; feed + saved speakers; one active audio; unrelated removal does not interrupt speech; mobile layout.`);
 } finally { await browser.close(); }
-

@@ -46,6 +46,8 @@ model Item {
 
   @@index([section, publishedAt])
   @@index([section, score, publishedAt])
+  @@index([section, createdAt, score])
+  @@index([createdAt])
 }
 
 // References live content only. Content/account deletion immediately releases saved slots.

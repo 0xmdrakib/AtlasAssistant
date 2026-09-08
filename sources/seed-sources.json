@@ -167,7 +167,7 @@
   },
   {
     "section": "global",
-    "name": "RT\u00c9 News",
+    "name": "RTÉ News",
     "type": "rss",
     "url": "https://www.rte.ie/feeds/rss/?index=/news/",
     "country": "IE",
@@ -1165,47 +1165,6 @@
     "enabled": true
   },
   {
-    "section": "faith",
-    "name": "About Islam",
-    "type": "rss",
-    "url": "https://aboutislam.net/feed/",
-    "trustScore": 70,
-    "enabled": true
-  },
-  {
-    "section": "faith",
-    "name": "MuslimMatters",
-    "type": "rss",
-    "url": "https://muslimmatters.org/feed/",
-    "trustScore": 82,
-    "country": "US",
-    "enabled": true
-  },
-  {
-    "section": "faith",
-    "name": "Productive Muslim",
-    "type": "rss",
-    "url": "https://productivemuslim.com/feed/",
-    "trustScore": 80,
-    "enabled": true
-  },
-  {
-    "section": "faith",
-    "name": "SeekersGuidance",
-    "type": "rss",
-    "url": "https://seekersguidance.org/feed/",
-    "trustScore": 85,
-    "enabled": true
-  },
-  {
-    "section": "faith",
-    "name": "The Muslim Vibe",
-    "type": "rss",
-    "url": "https://themuslimvibe.com/feed",
-    "trustScore": 75,
-    "enabled": true
-  },
-  {
     "section": "history",
     "name": "HistoryExtra",
     "type": "rss",
@@ -1228,23 +1187,6 @@
     "type": "rss",
     "url": "https://news.google.com/rss/search?q=islamic+history+OR+ottoman+OR+caliphate+OR+andalus+OR+archaeology&hl=en&gl=US&ceid=US:en",
     "trustScore": 79,
-    "enabled": true
-  },
-  {
-    "section": "faith",
-    "name": "Islam21c",
-    "type": "rss",
-    "url": "https://www.islam21c.com/feed/",
-    "trustScore": 82,
-    "country": "GB",
-    "enabled": true
-  },
-  {
-    "section": "faith",
-    "name": "Google News - Faith",
-    "type": "rss",
-    "url": "https://news.google.com/rss/search?q=Islam+OR+Quran+OR+Hadith+OR+fiqh+OR+dua+OR+mosque+OR+Ramadan&hl=en&gl=US&ceid=US:en",
-    "trustScore": 78,
     "enabled": true
   }
 ]

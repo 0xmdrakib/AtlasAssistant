@@ -37,10 +37,6 @@ const LEGACY_SECTION_MAP: Record<string, CanonicalSection> = {
   news: "global",
   "global-news": "global",
   cosmos: "universe",
-  // Previously a combined section; in the 8-section architecture this maps to Faith.
-  "universe-faith": "faith",
-  "universe + faith": "faith",
-  "universe and faith": "faith",
   signals: "early",
   "early-signals": "early",
   "great-creators": "creators",
@@ -60,7 +56,6 @@ function envBool(name: string, fallback: boolean): boolean {
 
 function normalizeSectionKey(raw: string): string {
   // Lowercase + strip leading slash + normalize separators.
-  // Examples: "Universe + Faith" -> "universe-faith", "/Global" -> "global".
   return String(raw || "")
     .trim()
     .replace(/^\/+/, "")
@@ -71,8 +66,10 @@ function normalizeSectionKey(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function toCanonicalSection(section: string): CanonicalSection {
+function toCanonicalSection(section: string): CanonicalSection | null {
   const s = normalizeSectionKey(section);
+  // Retired source labels must never be reassigned to another feed.
+  if (s.includes("faith")) return null;
 
   // Direct map for known legacy labels
   const mapped = LEGACY_SECTION_MAP[s] || (s as any);
@@ -86,9 +83,8 @@ function toCanonicalSection(section: string): CanonicalSection {
   if (/(creator|design|maker)/.test(s)) return "creators";
   if (/(universe|space|cosmo|astronomy|physics)/.test(s)) return "universe";
   if (/(history|heritage|ancient)/.test(s)) return "history";
-  if (/(faith|islam|quran|hadith|religion)/.test(s)) return "faith";
 
-  return "global";
+  return null;
 }
 
 function sectionAliases(canonical: CanonicalSection): string[] {
@@ -250,13 +246,6 @@ const CATEGORY_RULES: Record<CanonicalSection, Array<{ code: string; keywords: s
     { code: "archaeology", keywords: ["archaeology", "excavation", "artifact", "ruins"] },
     { code: "trade", keywords: ["trade", "silk road", "caravan", "maritime"] },
   ],
-  faith: [
-    { code: "quran", keywords: ["quran", "surah", "ayat"] },
-    { code: "hadith", keywords: ["hadith", "sahih", "bukhari", "muslim"] },
-    { code: "fiqh", keywords: ["fiqh", "fatwa", "madhhab", "sharia"] },
-    { code: "spirituality", keywords: ["spiritual", "tazkiyah", "dua", "dhikr"] },
-    { code: "ethics", keywords: ["ethic", "akhlaq", "character"] },
-  ],
 };
 
 const ALLOWED_TOPIC_CODES = new Set<string>(
@@ -374,7 +363,6 @@ async function gdeltCandidates(section: string): Promise<
     creators: "open-source OR tutorial OR course OR community",
     universe: "NASA OR telescope OR exoplanet OR galaxy",
     history: "islamic history OR ottoman OR andalus OR caliphate",
-    faith: "Quran OR Hadith OR sunnah OR fiqh",
   };
   const q = encodeURIComponent(queryMap[section] || queryMap.global);
   // Keep in sync with discovery: mode=artlist + sort=datedesc.
@@ -449,9 +437,9 @@ async function ensureSeedSourcesInDb(): Promise<{ seeded: boolean; inserted: num
   if (rssCount > 0) return { seeded: false, inserted: 0 };
 
   const rows = (seedSources as unknown as SeedSource[])
-    .filter((s) => s && typeof s.url === "string" && s.url.startsWith("http"))
+    .filter((s) => s && typeof s.url === "string" && s.url.startsWith("http") && toCanonicalSection(s.section))
     .map((s) => ({
-      section: toCanonicalSection(s.section || ""),
+      section: toCanonicalSection(s.section || "")!,
       name: String(s.name || s.url),
       url: String(s.url),
       country: s.country ? String(s.country).toUpperCase() : null,
@@ -546,7 +534,6 @@ export async function ingestOnce() {
     creators: new Set(),
     universe: new Set(),
     history: new Set(),
-    faith: new Set(),
   };
 
   const sourceCooldownHours = clamp(Number(process.env.INGEST_SOURCE_COOLDOWN_HOURS || 6), 0, 48);
@@ -559,7 +546,6 @@ export async function ingestOnce() {
     creators: new Set(),
     universe: new Set(),
     history: new Set(),
-    faith: new Set(),
   };
 
 
@@ -573,6 +559,7 @@ export async function ingestOnce() {
 
   for (const it of recentItems) {
     const sec = toCanonicalSection(it.section);
+    if (!sec) continue;
     const bucket = state[sec];
     if (!bucket) continue;
     if (noRepeatHours > 0 && it.createdAt >= noRepeatSince && (it as any).url) recentUrlBySection[sec].add((it as any).url);
@@ -596,7 +583,6 @@ export async function ingestOnce() {
     creators: [],
     universe: [],
     history: [],
-    faith: [],
   };
 
   function pushCandidate(section: CanonicalSection, c: IngestCandidate) {
@@ -666,11 +652,11 @@ export async function ingestOnce() {
     creators: [],
     universe: [],
     history: [],
-    faith: [],
   };
 
   for (const s of allRssSources) {
     const canonical = toCanonicalSection(s.section);
+    if (!canonical) continue;
     (sourcesBySection[canonical] || sourcesBySection.global).push(s);
   }
 
@@ -684,7 +670,6 @@ export async function ingestOnce() {
     creators: [],
     universe: [],
     history: [],
-    faith: [],
   };
 
   for (const sec of sections) {
@@ -783,7 +768,6 @@ export async function ingestOnce() {
   }
 
   async function googleNewsCandidates(section: CanonicalSection) {
-    if (section === "faith") return [];
     // A pragmatic fallback: Google News RSS is resilient when publisher RSS endpoints
     // are blocked or unavailable from serverless environments.
     const queryMap: Record<CanonicalSection, string> = {
@@ -794,7 +778,6 @@ export async function ingestOnce() {
       creators: "open source release OR tutorial OR new library",
       universe: "NASA OR telescope OR exoplanet",
       history: "history archaeology empire",
-      faith: "quran OR hadith OR fiqh",
     };
 
     const q = encodeURIComponent(queryMap[section] || "news");
@@ -845,13 +828,13 @@ export async function ingestOnce() {
     creators: 180,
     universe: 90,
     history: 3650,
-    faith: 180,
   };
 
   await mapLimit(selected, concurrency, async (s) => {
     if (Date.now() > hardDeadlineAt) return;
 
     const sec = toCanonicalSection(s.section);
+    if (!sec) return;
     const policy = SECTION_POLICIES[sec];
 
     processedSources += 1;

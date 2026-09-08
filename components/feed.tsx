@@ -2,15 +2,19 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ContentItem, Section } from "@/lib/types";
+import type { Section } from "@/lib/types";
 import { Card, Pill, Button, A, Segmented } from "@/components/ui";
 import { timeAgo } from "@/lib/utils";
-import { Sparkles, X } from "lucide-react";
+import { RefreshCw, Sparkles, X } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { useLanguage } from "@/components/language-provider";
 import { SpeakButton } from "@/components/speak-button";
 import { UpgradeModal } from "@/components/upgrade-modal";
 import { SaveButton } from "@/components/save-button";
+
+import { useAppConfig } from "@/components/app-config-provider";
+import type { FeedPayload } from "@/lib/feed-types";
+import { cachedFeed, feedCacheKey, FEED_CACHE_MS, requestFeed, storeFeed } from "@/lib/feed-cache";
 
 type Days = 1 | 7;
 type DigestOutput = {
@@ -76,15 +80,15 @@ function stripKeyPointsFromSummary(summary: string): string {
   return out.trim();
 }
 
-export function Feed({ section }: { section: Section }) {
+export function Feed({ section, initialData }: { section: Section; initialData?: FeedPayload }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const authed = status === "authenticated";
-  const { lang, t, speechLang } = useLanguage();
+  const { lang, t, speechLang, ready } = useLanguage();
 
-  const [items, setItems] = React.useState<ContentItem[]>([]);
+
   const [country, setCountry] = React.useState("");
   const [topic, setTopic] = React.useState("");
   const [days, setDays] = React.useState<Days>(1);
@@ -92,14 +96,30 @@ export function Feed({ section }: { section: Section }) {
   const [aiOpen, setAiOpen] = React.useState<Record<string, boolean>>({});
   const [aiLoading, setAiLoading] = React.useState<Record<string, boolean>>({});
 
-  const [aiSummaryEnabled, setAiSummaryEnabled] = React.useState<boolean | null>(null);
+  const { summaryEnabled: aiSummaryEnabled } = useAppConfig();
+  const account = JSON.stringify([session?.user?.email || status, session?.subscription]);
+  const key = feedCacheKey(section, days, lang, account);
+  const initialKey = feedCacheKey(section, 1, "en", "public");
+  const [feed, setFeed] = React.useState<{ key: string; data: FeedPayload } | null>(
+    initialData ? { key: initialKey, data: initialData } : null
+  );
+  const visible = feed?.key === key ? feed.data : days === 1 ? initialData : undefined;
+  const items = React.useMemo(() => (visible?.items || []).filter((item) =>
+    (!country.trim() || item.country?.toLowerCase().includes(country.trim().toLowerCase())) &&
+    (!topic.trim() || item.topics.some((value) => value.toLowerCase().includes(topic.trim().toLowerCase())))
+  ), [visible, country, topic]);
+  const [feedLoading, setFeedLoading] = React.useState(!initialData);
+  const [feedError, setFeedError] = React.useState(false);
+  const requestVersion = React.useRef(0);
+  const activeKey = React.useRef(key);
+  activeKey.current = key;
 
   const [digestOpen, setDigestOpen] = React.useState(false);
   const [digestLoading, setDigestLoading] = React.useState(false);
   const [digest, setDigest] = React.useState<DigestOutput | null>(null);
   const [digestError, setDigestError] = React.useState<string>("");
 
-  const [last, setLast] = React.useState<string>("");
+  const last = visible?.meta.updatedAt || "";
   const [msg, setMsg] = React.useState<string>("");
   const [loginOpen, setLoginOpen] = React.useState(false);
   const [upgradeOpen, setUpgradeOpen] = React.useState(false);
@@ -155,62 +175,50 @@ export function Feed({ section }: { section: Section }) {
     setUpgradeOpen(true);
   }, [lang, searchParams, t]);
 
-  async function load() {
-    const qs = new URLSearchParams();
-    qs.set("section", section);
-    qs.set("days", String(days));
-    qs.set("lang", lang);
-    if (country) qs.set("country", country);
-    if (topic) qs.set("topic", topic);
-
-    const res = await fetch(`/api/items?${qs.toString()}`, { cache: "no-store" });
-    const json = await res.json();
-    const meta = json?.meta || {};
-
-    const rawItems = Array.isArray(json?.items) ? json.items : [];
-const normalized = rawItems.map((it: any) => ({
-  id: String(it?.id ?? ""),
-  section: (it?.section ?? section) as Section,
-  title: String(it?.title ?? ""),
-  summary: String(it?.summary ?? ""),
-  aiSummary: typeof it?.aiSummary === "string" ? it.aiSummary : undefined,
-  // Backward/forward compatible with both shapes:
-  // - new API: { sourceName: string }
-  // - older API: { source: { name: string } }
-  sourceName: String(it?.sourceName ?? it?.source?.name ?? "Unknown"),
-  url: String(it?.url ?? ""),
-  country: typeof it?.country === "string" ? it.country : undefined,
-  topics: Array.isArray(it?.topics) ? it.topics : [],
-  publishedAt: String(it?.publishedAt ?? it?.createdAt ?? new Date().toISOString()),
-  createdAt: String(it?.createdAt ?? it?.publishedAt ?? new Date().toISOString()),
-  score: typeof it?.score === "number" ? it.score : Number(it?.score ?? 0),
-}));
-setItems(normalized);
-setLast(new Date().toISOString());
-    // Translation status (shared cache).
-    if (lang !== "en" && !meta?.translateEnabled) {
-      setMsg(t(lang, "translateNeedsKey"));
-    } else {
-      setMsg("");
+  React.useEffect(() => {
+    if (!ready || (lang !== "en" && status === "loading")) return;
+    const version = ++requestVersion.current;
+    if (initialData) {
+      const previous = cachedFeed(initialKey);
+      const loadedAt = Date.parse(initialData.meta.updatedAt);
+      if (!previous || loadedAt > Date.parse(previous.data.meta.updatedAt)) storeFeed(initialKey, initialData, loadedAt);
     }
+    const cached = cachedFeed(key);
+    if (cached) setFeed({ key, data: cached.data });
+    setFeedError(false);
+    if (cached && Date.now() - cached.receivedAt < FEED_CACHE_MS) {
+      setFeedLoading(false);
+      return;
+    }
+    setFeedLoading(true);
+    void requestFeed(key, section, days, lang).then((data) => {
+      if (version === requestVersion.current && activeKey.current === key) setFeed({ key, data });
+    }).catch(() => {
+      if (version === requestVersion.current && activeKey.current === key) setFeedError(true);
+    }).finally(() => {
+      if (version === requestVersion.current && activeKey.current === key) setFeedLoading(false);
+    });
+    return () => { ++requestVersion.current; };
+  }, [key, initialKey, initialData, ready, section, days, lang, status === "loading"]);
 
-    if (aiSummaryEnabled === null) {
-      const s = await fetch(`/api/ai/status`, { cache: "no-store" }).then((r) => r.json());
-      setAiSummaryEnabled(Boolean(s?.summaryEnabled));
+  async function refreshFeed() {
+    const version = ++requestVersion.current;
+    setFeedLoading(true);
+    setFeedError(false);
+    try {
+      const data = await requestFeed(key, section, days, lang, true);
+      if (version === requestVersion.current && activeKey.current === key) setFeed({ key, data });
+    } catch {
+      if (version === requestVersion.current && activeKey.current === key) setFeedError(true);
+    } finally {
+      if (version === requestVersion.current && activeKey.current === key) setFeedLoading(false);
     }
   }
 
-  // Clamp the window selection (product rule: only 1 or 7 days everywhere).
   React.useEffect(() => {
-    setDays((prev) => (prev === 1 || prev === 7 ? prev : 1) as Days);
-  }, [section]);
-
-  React.useEffect(() => {
-    load().catch(() => setItems([]));
     setDigestOpen(false);
     setDigest(null);
     setDigestError("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, country, topic, days, lang]);
 
   async function ensureDigest() {
@@ -263,8 +271,15 @@ setLast(new Date().toISOString());
         throw new Error(j?.error || `Summary failed (${res.status})`);
       }
 
-      // reload to show cached fields where appropriate
-      await load();
+      // The mutation returns the summary: update this post without reloading the feed.
+      if (typeof j.aiSummary === "string" && activeKey.current === key) {
+        const current = cachedFeed(key)?.data || visible;
+        if (current) {
+          const data = { ...current, items: current.items.map((item) => item.id === id ? { ...item, aiSummary: j.aiSummary } : item) };
+          storeFeed(key, data);
+          setFeed({ key, data });
+        }
+      }
     } catch (e: any) {
       setMsg(e?.message || "Summary failed");
     } finally {
@@ -339,10 +354,14 @@ setLast(new Date().toISOString());
                 {t(lang, "liveDbFeed")}
               </span>
               <span className="opacity-60">•</span>
-              <span>
+              <span suppressHydrationWarning>
                 {t(lang, "lastLoaded")}: {last ? timeAgo(last) : "—"}
               </span>
-              <span className="opacity-60">•</span>
+              <button type="button" onClick={() => void refreshFeed()} disabled={feedLoading}
+                aria-label={t(lang, "refreshFeed")} title={t(lang, "refreshFeed")}
+                className="rounded-lg p-1.5 hover-subtle focus-ring disabled:opacity-50">
+                <RefreshCw size={13} className={feedLoading ? "animate-spin" : ""} />
+              </button>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
@@ -392,6 +411,8 @@ setLast(new Date().toISOString());
             </div>
 
             {msg ? <div className="text-xs text-muted">{msg}</div> : null}
+            {feedError ? <div role="alert" className="text-xs text-muted">{t(lang, "feedLoadError")}</div> : null}
+            {lang !== "en" && visible && !visible.meta.translateEnabled ? <div className="text-xs text-muted">{t(lang, "translateNeedsKey")}</div> : null}
           </div>
         </div>
       </Card>
@@ -463,7 +484,8 @@ setLast(new Date().toISOString());
         </Card>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="space-y-3" aria-busy={feedLoading}>
+        {!visible && feedLoading ? <div role="status" className="animate-pulse rounded-2xl border border-soft p-6 text-sm text-muted">{t(lang, "feedLoading")}</div> : null}
         {items.map((it) => {
           const open = Boolean(aiOpen[it.id]);
           const keyPoints = it.aiSummary ? extractKeyPointsFromSummary(it.aiSummary) : [];
@@ -484,23 +506,25 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
               <div className="min-w-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-xs text-muted">
+                    <div className="text-xs text-muted" suppressHydrationWarning>
                       {it.sourceName} • collected {timeAgo(it.createdAt)} • score {it.score.toFixed(2)}
                     </div>
                     <div className="mt-1 text-lg font-semibold leading-snug">{it.title}</div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <SpeakButton text={`${it.title}. ${it.summary}`} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
-                    <SaveButton item={it} />
                   </div>
                 </div>
                 <div className="mt-2 text-sm text-muted">{it.summary}</div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
                   {it.country ? <Pill>{it.country}</Pill> : null}
                   {it.topics.slice(0, 6).map((x) => (
                     <Pill key={x}>{x}</Pill>
                   ))}
+                  </div>
+                  <SaveButton item={it} />
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
@@ -508,7 +532,7 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
 
                   <Button
                     variant="ghost"
-                    className="w-full gap-2 sm:w-auto sm:ml-auto"
+                    className="ml-auto gap-2"
                     disabled={!aiSummaryEnabled}
                     onClick={async () => {
                       if (!requireLogin()) return;
@@ -555,7 +579,7 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
           );
         })}
 
-        {items.length === 0 ? <div className="text-sm text-muted">{t(lang, "noItems")}</div> : null}
+        {items.length === 0 && !feedLoading && !feedError ? <div className="text-sm text-muted">{t(lang, "noItems")}</div> : null}
       </div>
     </div>
   );

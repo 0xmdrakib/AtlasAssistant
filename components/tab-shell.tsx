@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Globe, Cpu, Lightbulb, Radar, Users, Telescope, BookOpen, Heart} from "lucide-react";
+import { Globe, Cpu, Lightbulb, Radar, Users, Telescope, BookOpen} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthButton } from "@/components/auth-button";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -18,7 +18,6 @@ const tabs = [
   { href: "/creators", labelKey: "tabCreators" as const, icon: Users },
   { href: "/universe", labelKey: "tabUniverse" as const, icon: Telescope },
   { href: "/history", labelKey: "tabHistory" as const, icon: BookOpen },
-  { href: "/faith", labelKey: "tabFaith" as const, icon: Heart },
 ];
 
 export function TabShell({ children }: { children: React.ReactNode }) {
