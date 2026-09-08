@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { subscriptionPrice } from "../lib/paymentProviders";
-import { createNowpaymentsPayment } from "../lib/nowpayments";
+import { assertPaymentMinimum, createNowpaymentsPayment, currenciesForAmount } from "../lib/nowpayments";
 
 const envKeys = [
   "APP_BASE_URL",
@@ -66,6 +66,28 @@ test("crypto checkout creates a direct payment with its callback and server-pric
 test("crypto checkout reports provider failures", async () => {
   mock.method(globalThis, "fetch", async () => new Response("Temporarily unavailable", { status: 503 }));
   await assert.rejects(createNowpaymentsPayment({ orderId: "test-order", amount: "2.99", currency: "usd", payCurrency: "usdcbsc" }), /payment service is temporarily unavailable/i);
+});
+
+test("the actual amountTo error is a network minimum rejection, not a server outage", async () => {
+  mock.method(globalThis, "fetch", async () => Response.json({ code: "BAD_REQUEST", message: "amountTo is too small" }, { status: 400 }));
+  await assert.rejects(createNowpaymentsPayment({ orderId: "test-order", amount: "2.99", currency: "usd", payCurrency: "usdcbase" }), (error: any) => error.code === "BELOW_NETWORK_MINIMUM" && error.status === 400);
+});
+
+test("network minimum checks use the final price and round displayed minimums up", () => {
+  const limit = { code: "usdcbase", minimum: 3.001, currency: "usd" };
+  assert.throws(() => assertPaymentMinimum("2.99", limit), /at least USD 3.01/);
+  assert.doesNotThrow(() => assertPaymentMinimum("3.01", limit));
+  assert.throws(() => assertPaymentMinimum("0.50", { ...limit, minimum: 1 }), /at least USD 1.00/);
+});
+
+test("network choices include only verified minimums supported by the payable amount", () => {
+  const networks = [
+    { code: "usdcbsc", asset: "USDC", network: "BNB", label: "USDC · BNB", minimum: 1 },
+    { code: "usdcbase", asset: "USDC", network: "Base", label: "USDC · Base", minimum: 3.5 },
+    { code: "usdttrc20", asset: "USDT", network: "Tron", label: "USDT · Tron" },
+  ];
+  assert.deepEqual(currenciesForAmount(networks, "2.99").map((row) => row.code), ["usdcbsc"]);
+  assert.deepEqual(currenciesForAmount(networks, "0.50"), []);
 });
 
 test("crypto checkout requires its API key before contacting the provider", async () => {

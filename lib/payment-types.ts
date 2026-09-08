@@ -1,4 +1,5 @@
-export type PaymentCurrency = { code: string; asset: string; network: string; label: string };
+export type PaymentCurrency = { code: string; asset: string; network: string; label: string; minimum?: number };
+export type PaymentMinimum = { code: string; minimum: number; currency: string };
 
 export type EmbeddedPayment = {
   id: string;

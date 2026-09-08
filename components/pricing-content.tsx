@@ -95,6 +95,12 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
   const polling = React.useRef(false);
   const activated = React.useRef<string | null>(null);
   const initialized = React.useRef(false);
+  const amount = discount?.price.finalAmount || price.amount;
+  const availableCurrencies = React.useMemo(() => currencies.filter((currency) => typeof currency.minimum === "number" && Number(amount) + 0.000001 >= currency.minimum), [currencies, amount]);
+
+  React.useEffect(() => {
+    if (selected && !availableCurrencies.some((currency) => currency.code === selected)) { setSelected(""); requestId.current = null; }
+  }, [availableCurrencies, selected]);
 
   const remember = React.useCallback((next: EmbeddedPayment | null) => {
     setPayment(next);
@@ -212,7 +218,6 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
   const canSend = payment?.status === "waiting" && !expiredQuote;
   const terminal = payment ? TERMINAL_PAYMENT_STATUSES.has(payment.status) : false;
   const asset = payment?.payCurrency?.toUpperCase().match(/^(USDT|USDC)/)?.[0] || payment?.payCurrency?.toUpperCase() || "Crypto";
-  const amount = discount?.price.finalAmount || price.amount;
   const statusLabels: Record<string, string> = { creating: "Preparing payment", waiting: "Awaiting payment", confirming: "Confirming on the network", confirmed: "Transfer confirmed · finalizing", sending: "Finalizing payment", partially_paid: "Partial payment received", finished: "Payment complete", expired: "Payment expired", failed: "Payment failed", refunded: "Payment refunded" };
   const statusLabel = payment ? statusLabels[payment.status] || "Checking payment" : "";
 
@@ -256,7 +261,7 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
       </div> : <>
         <p className="text-sm leading-6 text-muted">{bn ? "আপনার ওয়ালেটের সঠিক নেটওয়ার্ক বেছে নিন। এখানেই পেমেন্টের ঠিকানা ও QR দেখানো হবে।" : "Choose the network you’ll use in your wallet. Your payment address and QR code will appear here."}</p>
         <div className="space-y-2"><div className="text-sm font-medium">{bn ? "কয়েন ও নেটওয়ার্ক" : "Coin & network"}</div>
-          {networksLoading ? <p role="status" className="flex items-center gap-2 py-3 text-sm text-muted"><Loader2 size={16} className="animate-spin" />Loading available networks…</p> : networkError ? <div className="space-y-2"><p role="alert" className="text-sm text-muted">{networkError}</p><Button variant="ghost" onClick={() => void loadNetworks()}>Retry networks</Button></div> : <PaymentNetworkPicker currencies={currencies} value={selected} disabled={Boolean(busy)} label={bn ? "কয়েন ও নেটওয়ার্ক" : "Coin & network"} placeholder={bn ? "নেটওয়ার্ক বেছে নিন" : "Select a network"} onChange={(value) => { setSelected(value); requestId.current = null; setError(""); }} />}
+          {discount?.percentOff === 100 ? <p className="text-sm text-muted">Your code covers the full price. No payment is needed.</p> : networksLoading ? <p role="status" className="flex items-center gap-2 py-3 text-sm text-muted"><Loader2 size={16} className="animate-spin" />Loading available networks…</p> : networkError ? <div className="space-y-2"><p role="alert" className="text-sm text-muted">{networkError}</p><Button variant="ghost" onClick={() => void loadNetworks()}>Retry networks</Button></div> : availableCurrencies.length ? <><PaymentNetworkPicker currencies={availableCurrencies} value={selected} disabled={Boolean(busy)} label={bn ? "কয়েন ও নেটওয়ার্ক" : "Coin & network"} placeholder={bn ? "নেটওয়ার্ক বেছে নিন" : "Select a network"} onChange={(value) => { setSelected(value); requestId.current = null; setError(""); }} /><p className="text-xs text-muted">Only networks supporting {price.currency.toUpperCase()} {amount} are shown.</p></> : <div role="status" className="space-y-2 rounded-xl border border-soft bg-solid-muted p-3"><p className="text-sm leading-6">No payment networks currently support {price.currency.toUpperCase()} {amount}{discount ? " with this discount. Remove the code to see available networks." : ". Please try again later or contact billing support."}</p><Button variant="ghost" onClick={() => void loadNetworks()}>Refresh networks</Button></div>}
         </div>
         <div className="space-y-2"><label htmlFor="discount-code" className="text-xs text-muted">{bn ? "ডিসকাউন্ট কোড (যদি থাকে)" : "Discount code (optional)"}</label><div className="flex gap-2"><input id="discount-code" value={code} maxLength={80} autoComplete="off" disabled={Boolean(busy)} onChange={(event) => { setCode(event.target.value.toUpperCase()); setDiscount(null); requestId.current = null; }} className="min-w-0 flex-1 rounded-xl border border-soft bg-solid-muted px-3 py-2 text-sm focus-ring" placeholder="Enter code" /><Button variant="ghost" disabled={!code.trim() || Boolean(busy)} onClick={() => void applyDiscount()}>{busy === "discount" ? <Loader2 size={16} className="animate-spin" /> : "Apply"}</Button></div>
           {discount ? <p role="status" className="text-xs text-[hsl(var(--accent))]">{discount.percentOff}% off applied · {discount.code}</p> : null}

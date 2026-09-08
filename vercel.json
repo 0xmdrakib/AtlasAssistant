@@ -1,3 +1,4 @@
 {
+  "regions": ["sin1"],
   "buildCommand": "npm run db:migrate:saved && npm run db:migrate:feed && npm run db:migrate:checkout && npm run build"
 }

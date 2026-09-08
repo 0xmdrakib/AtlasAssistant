@@ -22,7 +22,7 @@ try {
     if (url.pathname === '/api/auth/csrf') return json(route, { csrfToken: 'local-test-only' });
     if (url.pathname === '/api/saved') return json(route, { plan: paid ? 'paid' : 'free', count: 0, limit: paid ? 50 : 10, remaining: paid ? 50 : 10, bookmarks: [], items: [] });
     if (url.pathname === '/api/billing/status') return json(route, { ok: true, plan: paid ? 'paid' : 'free', limits: { summary: paid ? 20 : 5, digest: paid ? 10 : 3 }, remaining: { summary: 3, digest: 2 } });
-    if (url.pathname === '/api/billing/currencies') return currencyFailure ? json(route, { ok: false, error: 'Networks temporarily unavailable' }, 503) : json(route, { ok: true, currencies: [{ code: 'usdcbsc', asset: 'USDC', network: 'BNB Smart Chain (BEP-20)', label: 'USDC · BNB Smart Chain (BEP-20)' }, { code: 'usdttrc20', asset: 'USDT', network: 'Tron (TRC-20)', label: 'USDT · Tron (TRC-20)' }] });
+    if (url.pathname === '/api/billing/currencies') return currencyFailure ? json(route, { ok: false, error: 'Networks temporarily unavailable' }, 503) : json(route, { ok: true, currencies: [{ code: 'usdcbsc', asset: 'USDC', network: 'BNB Smart Chain (BEP-20)', label: 'USDC · BNB Smart Chain (BEP-20)', minimum: 1 }, { code: 'usdttrc20', asset: 'USDT', network: 'Tron (TRC-20)', label: 'USDT · Tron (TRC-20)', minimum: 2 }, { code: 'usdcbase', asset: 'USDC', network: 'Base', label: 'USDC · Base', minimum: 5 }] });
     if (url.pathname === '/api/billing/payments/current') {
       if (delayRestore) { delayRestore = false; return new Promise((resolve) => { restoreRelease = async () => { await json(route, { ok: true, payment: current }); resolve(); }; }); }
       return json(route, { ok: true, payment: current });
@@ -40,7 +40,7 @@ try {
       creates++;
       return new Promise((resolve) => { createRelease = async () => { current = quote(); await json(route, { ok: true, payment: current }); resolve(); }; });
     }
-    if (url.pathname === '/api/billing/discount') return json(route, { ok: true, code: 'FREE', percentOff: 100, price: { currency: 'usd', finalAmount: '0.00' } });
+    if (url.pathname === '/api/billing/discount') return req.postDataJSON().code === 'HALF' ? json(route, { ok: true, code: 'HALF', percentOff: 50, price: { currency: 'usd', finalAmount: '1.50' } }) : json(route, { ok: true, code: 'FREE', percentOff: 100, price: { currency: 'usd', finalAmount: '0.00' } });
     if (url.pathname === '/api/billing/checkout/free') { freeCreates++; paid = true; current = { ...quote(), id: 'free-ui-fixture', status: 'finished', amount: '0.00', activatedAt: new Date().toISOString() }; return json(route, { ok: true, payment: current }); }
     return json(route, { ok: true, items: [], meta: { updatedAt: new Date().toISOString(), translateEnabled: false, translationAllowed: true } });
   });
@@ -70,6 +70,7 @@ try {
   const networks = page.getByRole('listbox');
   assert.equal(await networks.getByRole('img', { name: 'USDC logo' }).count(), 1);
   assert.equal(await networks.getByRole('img', { name: 'USDT logo' }).count(), 1);
+  assert.equal(await networks.getByRole('option', { name: 'USDC · Base' }).count(), 0, 'Unsupported amounts must never be selectable');
   await page.screenshot({ path: 'output/checkout/network-picker-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Network options fit on mobile');
@@ -125,6 +126,16 @@ try {
   await page.getByRole('button', { name: 'Check payment status' }).click();
   await page.getByRole('button', { name: 'Start a new checkout' }).waitFor();
   await page.getByRole('button', { name: 'Start a new checkout' }).click();
+  await page.getByRole('combobox', { name: 'Coin & network', exact: true }).click();
+  await page.getByRole('option', { name: 'USDT · Tron (TRC-20)' }).click();
+  await page.getByLabel('Discount code (optional)').fill('HALF');
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await page.getByText('50% off applied · HALF', { exact: true }).waitFor();
+  assert.ok(await page.getByRole('button', { name: 'Show payment details' }).isDisabled(), 'A discount clears a network that cannot support the discounted amount');
+  await page.getByRole('combobox', { name: 'Coin & network', exact: true }).click();
+  assert.equal(await page.getByRole('option').count(), 1);
+  assert.equal(await page.getByRole('option', { name: 'USDT · Tron (TRC-20)' }).count(), 0);
+  await page.keyboard.press('Escape');
   current = null; currencyFailure = true;
   await page.goto(base + '/pricing', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Retry networks' }).waitFor();

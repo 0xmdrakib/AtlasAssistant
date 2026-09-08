@@ -26,6 +26,7 @@ before(() => {
     assert.equal(new Headers(init?.headers).get("x-api-key"), "local-test-only");
     if (url.endsWith("/merchant/coins")) return Response.json({ selectedCurrencies: ["usdcbsc", "usdttrc20", "btc"] });
     if (url.endsWith("/full-currencies")) return Response.json({ currencies: ["usdcbsc", "usdttrc20", "btc", "usdterc20"] });
+    if (url.includes("/min-amount?")) return Response.json({ min_amount: 1, fiat_equivalent: 1 });
     if (url.endsWith("/payment") && init?.method === "POST") {
       providerCreates++;
       if (failNextCreate) { failNextCreate = false; return Response.json({ message: "temporary error" }, { status: 503 }); }

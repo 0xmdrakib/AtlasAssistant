@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { appUrl } from "@/lib/paymentProviders";
-import { PaymentError, type PaymentCurrency } from "@/lib/payment-types";
+import { appUrl, subscriptionPrice } from "@/lib/paymentProviders";
+import { PaymentError, type PaymentCurrency, type PaymentMinimum } from "@/lib/payment-types";
 
 export type ProviderPayment = Record<string, unknown>;
 const BASE_URL = "https://api.nowpayments.io/v1";
@@ -26,7 +26,7 @@ export async function nowpaymentsRequest(path: string, body?: Record<string, unk
     // Log only the provider's error summary, never request headers or payment data.
     const message = String(data?.message || "Non-JSON provider response").replaceAll(key, "[redacted]").slice(0, 300);
     console.error("NOWPayments request failed", { endpoint: path.split("?")[0], status: response.status, code: String(data?.code || "UNKNOWN").slice(0, 80), message });
-    if (/minimal|minimal_amount|min.amount|minimum/i.test(detail)) {
+    if (/minimal|minimal_amount|min.amount|minimum|amount(?:To|From)?\s+is\s+too\s+small/i.test(detail)) {
       throw new PaymentError("BELOW_NETWORK_MINIMUM", "This amount is below the selected network’s minimum. Choose another network or remove the discount.");
     }
     throw new PaymentError("PROVIDER_UNAVAILABLE", "The payment service is temporarily unavailable. Please try again.", 502);
@@ -81,6 +81,63 @@ export function getPaymentCurrencies(): Promise<PaymentCurrency[]> {
     return currencies;
   }).finally(() => { loadingCurrencies = null; });
   return loadingCurrencies;
+}
+
+const minimumCache = new Map<string, { value: PaymentMinimum; until: number }>();
+const minimumRequests = new Map<string, Promise<PaymentMinimum>>();
+
+export function getPaymentMinimum(code: string): Promise<PaymentMinimum> {
+  const currency = subscriptionPrice().currency;
+  const key = `${code}:${currency}`;
+  const cached = minimumCache.get(key);
+  if (cached && cached.until > Date.now()) return Promise.resolve(cached.value);
+  const pending = minimumRequests.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    if (!(await getPaymentCurrencies()).some((row) => row.code === code)) throw new PaymentError("INVALID_NETWORK", "Choose an available payment network.");
+    // Omitting currency_to lets NOWPayments use this merchant's configured
+    // outcome wallet and routing, exactly as POST /payment does.
+    const params = new URLSearchParams({ currency_from: code, fiat_equivalent: currency, is_fixed_rate: "true", is_fee_paid_by_user: "true" });
+    const data = await nowpaymentsRequest(`/min-amount?${params}`, undefined, 60);
+    let minimum = Number(data.fiat_equivalent);
+    if (!(Number.isFinite(minimum) && minimum > 0) && Number(data.min_amount) > 0) {
+      const estimate = await nowpaymentsRequest(`/estimate?${new URLSearchParams({ amount: String(data.min_amount), currency_from: code, currency_to: currency })}`, undefined, 60);
+      minimum = Number(estimate.estimated_amount);
+    }
+    if (!Number.isFinite(minimum) || minimum <= 0) throw new PaymentError("MINIMUM_UNAVAILABLE", "Unable to check this network’s minimum. Please try again.", 503);
+    const value = { code, minimum, currency };
+    minimumCache.set(key, { value, until: Date.now() + 60000 });
+    return value;
+  })().finally(() => minimumRequests.delete(key));
+  minimumRequests.set(key, request);
+  return request;
+}
+
+export function assertPaymentMinimum(amount: string, limit: PaymentMinimum) {
+  if (Number(amount) + 0.000001 < limit.minimum) throw new PaymentError("BELOW_NETWORK_MINIMUM", `This network requires at least ${limit.currency.toUpperCase()} ${(Math.ceil(limit.minimum * 100) / 100).toFixed(2)}. Choose another network or remove the discount.`);
+}
+
+export function currenciesForAmount(currencies: PaymentCurrency[], amount: string) {
+  return currencies.filter((currency) => typeof currency.minimum === "number" && Number(amount) + 0.000001 >= currency.minimum);
+}
+
+export async function getCheckoutCurrencies() {
+  const currencies = await getPaymentCurrencies();
+  const checked: PaymentCurrency[] = [];
+  let next = 0;
+  let unavailable = 0;
+  // Bound provider concurrency. Successful minimums are cached across requests.
+  await Promise.all(Array.from({ length: Math.min(6, currencies.length) }, async () => {
+    while (next < currencies.length) {
+      const currency = currencies[next++];
+      try { const limit = await getPaymentMinimum(currency.code); checked.push({ ...currency, minimum: limit.minimum }); }
+      catch { unavailable++; }
+    }
+  }));
+  const eligible = currenciesForAmount(checked, subscriptionPrice().amount);
+  eligible.sort((a, b) => a.asset.localeCompare(b.asset) || a.network.localeCompare(b.network));
+  if (!checked.length && unavailable) throw new PaymentError("MINIMUM_UNAVAILABLE", "Payment networks are temporarily unavailable. Please try again.", 503);
+  return { currencies: eligible, checkedCount: checked.length, unavailableCount: unavailable };
 }
 
 export function createNowpaymentsPayment(args: { orderId: string; amount: string; currency: string; payCurrency: string; discountCode?: string | null }) {

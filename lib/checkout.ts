@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { addOneMonth, planForSubscription } from "@/lib/billing";
 import { discountPrice } from "@/lib/discounts";
 import { subscriptionPrice } from "@/lib/paymentProviders";
-import { canonicalJson, createNowpaymentsPayment, getPaymentCurrencies, nowpaymentsRequest, paymentExpiry, type ProviderPayment } from "@/lib/nowpayments";
+import { assertPaymentMinimum, canonicalJson, createNowpaymentsPayment, getPaymentCurrencies, getPaymentMinimum, nowpaymentsRequest, paymentExpiry, type ProviderPayment } from "@/lib/nowpayments";
 import { PaymentError, TERMINAL_PAYMENT_STATUSES, type EmbeddedPayment } from "@/lib/payment-types";
 
 type Tx = Prisma.TransactionClient;
@@ -94,6 +94,8 @@ export async function beginCheckout(args: { userId: string; requestId: string; p
   if (!args.free && !selected) throw new PaymentError("INVALID_NETWORK", "Choose an available payment network.");
   const price = subscriptionPrice();
   if (!positive(price.amount) || !/^[a-z]{3}$/.test(price.currency)) throw new PaymentError("CHECKOUT_UNAVAILABLE", "Pricing is temporarily unavailable.", 503);
+  const minimum = selected ? await getPaymentMinimum(selected.code) : null;
+  if (minimum) assertPaymentMinimum(price.amount, minimum);
   const prepared = await prisma.$transaction(async (tx) => {
     const user = await lockUser(tx, args.userId);
     const repeated = await tx.paymentSession.findUnique({ where: { requestKey } });
@@ -109,6 +111,7 @@ export async function beginCheckout(args: { userId: string; requestId: string; p
       payCurrency: selected?.code || null, network: selected?.network || null, discountCode: code || null,
     } });
     const discount = code ? await reserveDiscount(tx, args.userId, code, row.id, price.amount, price.currency, Boolean(args.free)) : null;
+    if (minimum) assertPaymentMinimum(discount?.finalAmount || price.amount, minimum);
     const updated = await tx.paymentSession.update({ where: { id: row.id }, data: { finalPriceAmount: discount?.finalAmount || price.amount, discountPercentOff: discount?.percentOff || null } });
     if (args.free) await grantAccess(tx, updated);
     return { row: args.free ? (await tx.paymentSession.findUniqueOrThrow({ where: { id: row.id } })) : updated, created: true };
