@@ -20,28 +20,19 @@ type LanguageState = {
 const LanguageContext = React.createContext<LanguageState | null>(null);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  // Read from localStorage during initial render to avoid a flash of "en" after refresh.
-  const [lang, setLangState] = React.useState<LangCode>(() => {
-    try {
-      const saved = localStorage.getItem("atlas:lang");
-      const candidate = (saved as LangCode) || "en";
-      return languageByCode(candidate) ? candidate : "en";
-    } catch {
-      return "en";
-    }
-  });
+  // Match the server's first render, then restore the browser preference after hydration.
+  const [lang, setLangState] = React.useState<LangCode>("en");
+  const [uiDict, setUiDict] = React.useState<Record<string, string>>({});
 
-  const [uiDict, setUiDict] = React.useState<Record<string, string>>(() => {
+  React.useEffect(() => {
     try {
       const saved = localStorage.getItem("atlas:lang");
       const candidate = (saved as LangCode) || "en";
-      const code = languageByCode(candidate) ? candidate : "en";
-      const raw = localStorage.getItem(uiCacheKey(code));
-      return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+      setLangState(languageByCode(candidate) ? candidate : "en");
     } catch {
-      return {};
+      // English remains available when browser storage is disabled.
     }
-  });
+  }, []);
 
   const setLang = React.useCallback((next: LangCode) => {
     setLangState(next);
