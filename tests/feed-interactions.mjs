@@ -35,6 +35,8 @@ try {
     return json(route, { ok: true });
   });
   const page = await context.newPage();
+  const navigations = [];
+  page.on('request', (request) => { if (new URL(request.url()).searchParams.has('upgrade')) navigations.push(request.url()); });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/tech`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Refresh feed', exact: true }).waitFor();
@@ -62,7 +64,13 @@ try {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   assert.ok(!requests.some((url) => ['/api/billing/status', '/api/billing/config', '/api/ai/status'].includes(url)), 'Menu and feed must use existing session/public config');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const detailsStart = Date.now();
+  await page.getByRole('button', { name: 'Subscription Owner access', exact: true }).click();
+  await page.getByText('Current plan', { exact: true }).waitFor({ timeout: 750 });
+  const detailsMs = Date.now() - detailsStart;
+  assert.deepEqual(navigations, [], 'Opening subscription details must not navigate to the server');
+  assert.ok(!requests.includes('/api/billing/status'), 'Owner details need no redundant quota request');
+  await page.getByRole('button', { name: 'Not now', exact: true }).click();
 
   const filterRequests = feedCount();
   await page.getByRole('textbox').first().fill('US');
@@ -98,5 +106,5 @@ try {
     await page.screenshot({ path: `output/performance/feed-${width}.png`, fullPage: true });
   }
   assert.deepEqual(errors, []);
-  console.log(`PASS: menu displays session subscription in ${menuMs}ms with zero billing/config requests; no session remount or duplicate feed; local filters; cache on tab return; stale response ignored; desktop/mobile speaker and save placement; Faith removed.`);
+  console.log(`PASS: menu ${menuMs}ms, subscription details ${detailsMs}ms with zero server navigation/billing/config requests; no session remount or duplicate feed; local filters; cache on tab return; stale response ignored; desktop/mobile speaker and save placement; Faith removed.`);
 } finally { await browser.close(); }

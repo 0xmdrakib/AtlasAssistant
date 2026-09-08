@@ -70,8 +70,9 @@ export function UpgradeModal({
   const [error, setError] = React.useState("");
   const { price } = useAppConfig();
   const priceLabel = `${price.currency.toUpperCase()} ${price.amount} / month`;
-  const account = session?.user?.email || status;
+  const account = JSON.stringify([session?.user?.email || status, session?.subscription]);
   const [usage, setUsage] = React.useState<{ account: string; value: BillingStatus } | null>(null);
+  const cachedUsage = React.useRef<{ account: string; value: BillingStatus; loadedAt: number } | null>(null);
   const billingStatus = { ...(usage?.account === account ? usage.value : {}), ...session?.subscription };
   const [discountCode, setDiscountCode] = React.useState("");
   const [appliedDiscount, setAppliedDiscount] = React.useState<AppliedDiscount | null>(null);
@@ -81,11 +82,19 @@ export function UpgradeModal({
     let cancelled = false;
     setError("");
     setAppliedDiscount(null);
+    if (!authed || session?.subscription?.isOwner) return;
+    if (cachedUsage.current?.account === account && Date.now() - cachedUsage.current.loadedAt < 30000) {
+      setUsage(cachedUsage.current);
+      return;
+    }
     (async () => {
       try {
         const statusRes = await fetch("/api/billing/status", { cache: "no-store" });
         const statusData = await statusRes.json();
-        if (!cancelled && statusRes.ok && statusData?.ok) setUsage({ account, value: statusData });
+        if (!cancelled && statusRes.ok && statusData?.ok) {
+          cachedUsage.current = { account, value: statusData, loadedAt: Date.now() };
+          setUsage(cachedUsage.current);
+        }
       } catch {
         // Keep the built-in defaults.
       }
@@ -93,7 +102,7 @@ export function UpgradeModal({
     return () => {
       cancelled = true;
     };
-  }, [open, account]);
+  }, [open, account, authed, session?.subscription?.isOwner]);
 
   if (!open) return null;
 

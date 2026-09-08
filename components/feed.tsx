@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { Section } from "@/lib/types";
 import { Card, Pill, Button, A, Segmented } from "@/components/ui";
 import { timeAgo } from "@/lib/utils";
@@ -82,7 +82,6 @@ function stripKeyPointsFromSummary(summary: string): string {
 
 export function Feed({ section, initialData }: { section: Section; initialData?: FeedPayload }) {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const authed = status === "authenticated";
@@ -139,10 +138,10 @@ export function Feed({ section, initialData }: { section: Section; initialData?:
       const params = new URLSearchParams(searchParams.toString());
       if (params.get("upgrade") !== "pro") {
         params.set("upgrade", "pro");
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        window.history.replaceState(null, "", `${pathname}?${params.toString()}${window.location.hash}`);
       }
     },
-    [lang, pathname, router, searchParams, t]
+    [lang, pathname, searchParams, t]
   );
 
   function closeUpgrade() {
@@ -153,7 +152,7 @@ export function Feed({ section, initialData }: { section: Section; initialData?:
     if (params.get("upgrade") === "pro") {
       params.delete("upgrade");
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      window.history.replaceState(null, "", `${qs ? `${pathname}?${qs}` : pathname}${window.location.hash}`);
     }
   }
 

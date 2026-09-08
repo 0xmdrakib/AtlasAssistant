@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useAppConfig } from "@/components/app-config-provider";
 import { useSavedItems } from "@/components/saved-provider";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Menu, Globe, Search, Check, ChevronDown, LogOut, Sparkles, Shield, Bookmark } from "lucide-react";
 import { Card, Button, Pill } from "@/components/ui";
 import { LANGUAGES, languageByCode } from "@/lib/i18n";
@@ -46,7 +46,6 @@ function subscriptionBadge(status: BillingStatus | null, fallback: string) {
 export function SettingsMenu() {
   const { state: savedState } = useSavedItems();
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { lang, setLang, t } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -84,9 +83,10 @@ export function SettingsMenu() {
 
       const params = new URLSearchParams(searchParams.toString());
       params.set("upgrade", "pro");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      // This flag only opens a client panel; changing it needs no server navigation.
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}${window.location.hash}`);
     },
-    [pathname, router, searchParams]
+    [pathname, searchParams]
   );
 
   const prefetchUiTranslations = React.useCallback(async (target: string) => {

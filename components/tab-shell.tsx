@@ -23,7 +23,10 @@ const tabs = [
 export function TabShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const sp = useSearchParams();
-  const qs = sp.toString();
+  // Opening a local dialog must not create new prefetch requests for every tab.
+  const navigationParams = new URLSearchParams(sp.toString());
+  navigationParams.delete("upgrade");
+  const qs = navigationParams.toString();
   const { lang, t } = useLanguage();
 
   return (
