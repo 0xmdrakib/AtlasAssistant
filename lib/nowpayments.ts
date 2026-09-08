@@ -16,11 +16,15 @@ export async function nowpaymentsRequest(path: string, body?: Record<string, unk
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
+    console.error("NOWPayments request failed", { endpoint: path.split("?")[0], code: "NETWORK_TIMEOUT" });
     throw new PaymentError("PROVIDER_UNAVAILABLE", "The payment service did not respond. Please try again.", 502);
   }
   const data = await response.json().catch(() => null);
   if (!response.ok || !data) {
     const detail = `${data?.code || ""} ${data?.message || ""}`;
+    // Log only the provider's error summary, never request headers or payment data.
+    const message = String(data?.message || "Non-JSON provider response").replaceAll(key, "[redacted]").slice(0, 300);
+    console.error("NOWPayments request failed", { endpoint: path.split("?")[0], status: response.status, code: String(data?.code || "UNKNOWN").slice(0, 80), message });
     if (/minimal|minimal_amount|min.amount|minimum/i.test(detail)) {
       throw new PaymentError("BELOW_NETWORK_MINIMUM", "This amount is below the selected network’s minimum. Choose another network or remove the discount.");
     }
