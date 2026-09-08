@@ -13,7 +13,7 @@ process.env.DIRECT_URL = databaseUrl;
 process.env.OWNER_EMAILS = "";
 
 const { prisma } = await import("../lib/prisma");
-const { getSavedItems, setItemSaved, SavedItemError } = await import("../lib/saved-items");
+const { getSavedItems, mutateSavedItem: setItemSaved, SavedItemError } = await import("../lib/saved-items");
 const prefix = `saved-test-${randomUUID()}`;
 const users: string[] = [];
 let sourceId: string;

@@ -11,6 +11,8 @@
     "lint": "next lint",
     "test:billing": "tsx --test tests/payment-providers.test.ts",
     "test:saved": "tsx --test tests/saved-items.test.ts",
+    "test:saved-ui-state": "tsx --test tests/saved-state.test.ts",
+    "test:saved-interactions": "node tests/saved-interactions.mjs",
     "db:migrate:saved": "prisma db execute --file prisma/changes/20260909_saved_items.sql --schema prisma/schema.prisma",
     "db:migrate": "prisma db push --skip-generate",
     "db:generate": "prisma generate",

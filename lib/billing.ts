@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isOwnerEmail } from "@/lib/owner-email";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, User } from "@prisma/client";
 
 export type PlanName = "free" | "paid";
 export type AiCountKind = "digest" | "summary";
@@ -35,24 +35,15 @@ function periodKey(start: Date, end: Date): string {
   return `${start.toISOString()}__${end.toISOString()}`;
 }
 
-export async function getPlanForUser(userId: string, now = new Date(), db: Pick<Prisma.TransactionClient, "user"> = prisma): Promise<{
+export type SubscriptionUser = Pick<User, "email" | "subscriptionPlan" | "subscriptionStatus" | "subscriptionCurrentPeriodStart" | "subscriptionCurrentPeriodEnd">;
+
+export function planForSubscription(u: SubscriptionUser | null, now = new Date()): {
   plan: PlanName;
   status: string;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
   isOwner: boolean;
-}> {
-  const u = await db.user.findUnique({
-    where: { id: userId },
-    select: {
-      email: true,
-      subscriptionPlan: true,
-      subscriptionStatus: true,
-      subscriptionCurrentPeriodStart: true,
-      subscriptionCurrentPeriodEnd: true,
-    },
-  });
-
+} {
   if (isOwnerEmail(u?.email)) {
     return {
       plan: "paid",
@@ -76,6 +67,17 @@ export async function getPlanForUser(userId: string, now = new Date(), db: Pick<
     currentPeriodEnd: active ? u?.subscriptionCurrentPeriodEnd || null : null,
     isOwner: false,
   };
+}
+
+export async function getPlanForUser(userId: string, now = new Date(), db: Pick<Prisma.TransactionClient, "user"> = prisma) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true, subscriptionPlan: true, subscriptionStatus: true,
+      subscriptionCurrentPeriodStart: true, subscriptionCurrentPeriodEnd: true,
+    },
+  });
+  return planForSubscription(user, now);
 }
 
 export function limitsForPlan(plan: PlanName) {

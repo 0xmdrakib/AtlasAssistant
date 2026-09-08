@@ -489,7 +489,10 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
                     </div>
                     <div className="mt-1 text-lg font-semibold leading-snug">{it.title}</div>
                   </div>
-                  <SaveButton itemId={it.id} />
+                  <div className="flex shrink-0 items-center gap-1">
+                    <SpeakButton text={`${it.title}. ${it.summary}`} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
+                    <SaveButton item={it} />
+                  </div>
                 </div>
                 <div className="mt-2 text-sm text-muted">{it.summary}</div>
 

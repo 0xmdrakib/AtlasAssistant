@@ -7,12 +7,13 @@ import { Bookmark, ArrowLeft, ArrowUpRight, RefreshCw, Sparkles } from "lucide-r
 import { useSavedItems } from "@/components/saved-provider";
 import { useLanguage } from "@/components/language-provider";
 import { SaveButton } from "@/components/save-button";
+import { SpeakButton } from "@/components/speak-button";
 import { Card, Button, Pill, A } from "@/components/ui";
 
 export function SavedContent() {
   const { status } = useSession();
   const { state, loading, error, refresh } = useSavedItems();
-  const { lang, t } = useLanguage();
+  const { lang, t, speechLang } = useLanguage();
   const number = (value: number) => value.toLocaleString(lang);
   React.useEffect(() => { void refresh(); }, [refresh]);
 
@@ -73,7 +74,10 @@ export function SavedContent() {
               <p className="text-xs text-muted">{item.sourceName} <span aria-hidden="true">·</span> {new Date(item.publishedAt).toLocaleDateString(lang, { month: "short", day: "numeric" })}</p>
               <h2 className="mt-2 text-lg font-semibold leading-snug">{item.title}</h2>
             </div>
-            <SaveButton itemId={item.id} />
+            <div className="flex shrink-0 items-center gap-1">
+              <SpeakButton text={`${item.title}. ${item.summary}`} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
+              <SaveButton item={item} />
+            </div>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-muted">{item.summary}</p>
           <div className="mt-3 flex flex-wrap gap-2">{item.country ? <Pill>{item.country}</Pill> : null}{item.topics.slice(0, 6).map((topic) => <Pill key={topic}>{topic}</Pill>)}</div>

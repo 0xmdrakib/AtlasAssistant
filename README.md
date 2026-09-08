@@ -39,6 +39,11 @@ Pick a **Country** + **Topic** + **time window (1d / 7d)** and Atlas curates the
 - Free accounts can keep 10 posts; Pro accounts can keep 50.
 - Removing a bookmark or deleting its original post frees a slot immediately.
 - Saves are private account references, not permanent copies. Existing saves survive a plan downgrade, but new saves require room under the current limit.
+- Feed and saved cards include a speaker button. Saving updates the interface immediately, with rollback if the server rejects the change.
+
+Saved interaction checks:
+- `npm run test:saved-ui-state` checks optimistic updates and rollback.
+- `npm run test:saved-interactions` uses Playwright and a running production build at `http://127.0.0.1:3000` (override with `UI_TEST_BASE`). It intercepts all API calls with isolated fixtures to test slow responses, failed saves and speech controls without account or database changes. Provide a Playwright installation as the `playwright` package or set `PLAYWRIGHT_MODULE` to its module URL. Chrome must be available.
 
 ### Database deployment
 The existing database is managed with `npm run db:migrate` (Prisma db push).

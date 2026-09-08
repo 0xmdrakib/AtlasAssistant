@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { setItemSaved } from "@/lib/saved-items";
+import { mutateSavedItem, setItemSaved } from "@/lib/saved-items";
 import { savedApiError, savedResponse, savedUserId } from "@/lib/saved-api";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,8 @@ async function update(req: NextRequest, itemId: string, saved: boolean) {
   }
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(itemId)) return savedResponse({ ok: false, code: "INVALID_ITEM" }, 400);
   try {
-    const state = await setItemSaved(await savedUserId(), itemId, saved);
+    const mutate = req.nextUrl.searchParams.get("compact") === "1" ? mutateSavedItem : setItemSaved;
+    const state = await mutate(await savedUserId(), itemId, saved);
     return savedResponse({ ok: true, ...state });
   } catch (error) {
     return savedApiError(error);
