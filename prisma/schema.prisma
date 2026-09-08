@@ -92,12 +92,12 @@ model AiUsage {
 }
 
 // --- Billing / subscription state ---
-// v1 supports NOWPayments crypto checkout and Paddle card subscriptions.
+// Supports NOWPayments crypto checkout and discount-based access.
 model PaymentSession {
   id          String   @id @default(cuid())
   userId      String
   orderId     String   @unique
-  method      String   // "crypto" | "card" | "discount"
+  method      String   // New sessions use "crypto" or "discount".
   status      String   @default("pending")
 
   priceAmount   String
@@ -114,9 +114,11 @@ model PaymentSession {
   nowpaymentsPurchaseId String?
   invoiceUrl           String?
 
-  checkoutUrl          String?
-  paddleTransactionId  String? @unique
-  paddleSubscriptionId String?
+  // Retain historical columns without exposing the retired provider to Prisma Client.
+  // Keeping these columns avoids deleting existing payment records on schema sync.
+  checkoutUrl          String? @ignore
+  paddleTransactionId  String? @unique @ignore
+  paddleSubscriptionId String? @ignore
 
   rawProviderData Json?
   createdAt DateTime @default(now())
@@ -233,8 +235,9 @@ model User {
   subscriptionCurrentPeriodStart DateTime?
   subscriptionCurrentPeriodEnd DateTime?
   subscriptionProvider String?
-  subscriptionProviderCustomerId String?
-  subscriptionProviderSubscriptionId String? @unique
+  // Historical provider identifiers; excluded from the active billing client.
+  subscriptionProviderCustomerId String? @ignore
+  subscriptionProviderSubscriptionId String? @unique @ignore
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 
-const updatedAt = "May 10, 2026";
+const updatedAt = "September 9, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="font-semibold">Payments</h2>
               <p className="mt-1 text-muted">
-                Card payments are handled by Paddle. Crypto payments are handled by NOWPayments. Atlas Assistant does not store full card numbers, card security codes, or private crypto wallet keys.
+                Crypto payments are handled by NOWPayments. Atlas Assistant does not store private crypto wallet keys.
               </p>
             </section>
 

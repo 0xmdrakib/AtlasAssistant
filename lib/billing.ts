@@ -255,8 +255,6 @@ export async function activatePaidAccess(args: {
   periodStart?: Date | string | null;
   periodEnd?: Date | string | null;
   provider?: string | null;
-  providerCustomerId?: string | null;
-  providerSubscriptionId?: string | null;
 }) {
   const now = new Date();
   const start = args.periodStart ? new Date(args.periodStart) : now;
@@ -271,8 +269,6 @@ export async function activatePaidAccess(args: {
       subscriptionCurrentPeriodStart: Number.isNaN(start.getTime()) ? now : start,
       subscriptionCurrentPeriodEnd: end,
       subscriptionProvider: args.provider || undefined,
-      subscriptionProviderCustomerId: args.providerCustomerId || undefined,
-      subscriptionProviderSubscriptionId: args.providerSubscriptionId || undefined,
     },
   });
 
@@ -286,32 +282,4 @@ export async function activatePaidAccess(args: {
   }
 
   return { currentPeriodStart: Number.isNaN(start.getTime()) ? now : start, currentPeriodEnd: end };
-}
-
-export async function updateSubscriptionFromProvider(args: {
-  userId: string;
-  status: string;
-  provider: string;
-  providerCustomerId?: string | null;
-  providerSubscriptionId?: string | null;
-  periodStart?: Date | string | null;
-  periodEnd?: Date | string | null;
-}) {
-  const normalizedStatus = String(args.status || "free").toLowerCase();
-  const active = normalizedStatus === "active" || normalizedStatus === "trialing";
-  const start = args.periodStart ? new Date(args.periodStart) : null;
-  const end = args.periodEnd ? new Date(args.periodEnd) : null;
-
-  await prisma.user.update({
-    where: { id: args.userId },
-    data: {
-      subscriptionPlan: active ? "paid" : "free",
-      subscriptionStatus: normalizedStatus,
-      subscriptionCurrentPeriodStart: start && !Number.isNaN(start.getTime()) ? start : undefined,
-      subscriptionCurrentPeriodEnd: end && !Number.isNaN(end.getTime()) ? end : undefined,
-      subscriptionProvider: args.provider,
-      subscriptionProviderCustomerId: args.providerCustomerId || undefined,
-      subscriptionProviderSubscriptionId: args.providerSubscriptionId || undefined,
-    },
-  });
 }

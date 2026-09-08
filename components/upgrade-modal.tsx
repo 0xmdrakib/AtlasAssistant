@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { BadgePercent, Coins, CreditCard, Sparkles, X } from "lucide-react";
+import { BadgePercent, Coins, Sparkles, X } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { Button, Card } from "@/components/ui";
 import { useLanguage } from "@/components/language-provider";
 
-type PayMethod = "card" | "crypto";
 type BillingStatus = {
   ok?: boolean;
   authed?: boolean;
@@ -15,10 +14,6 @@ type BillingStatus = {
   currentPeriodEnd?: string | null;
   limits?: { summary: number; digest: number; paidTranslationLanguages: number };
   remaining?: { summary: number; digest: number };
-};
-type BillingConfig = {
-  cardPaymentEnabled?: boolean;
-  price?: { amount?: string; currency?: string };
 };
 type AppliedDiscount = {
   code: string;
@@ -70,11 +65,10 @@ export function UpgradeModal({
   const { status } = useSession();
   const authed = status === "authenticated";
   const { lang, t } = useLanguage();
-  const [loading, setLoading] = React.useState<PayMethod | null>(null);
+  const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [priceLabel, setPriceLabel] = React.useState("$2.99 / month");
   const [billingStatus, setBillingStatus] = React.useState<BillingStatus | null>(null);
-  const [billingConfig, setBillingConfig] = React.useState<BillingConfig | null>(null);
   const [discountCode, setDiscountCode] = React.useState("");
   const [appliedDiscount, setAppliedDiscount] = React.useState<AppliedDiscount | null>(null);
 
@@ -94,7 +88,6 @@ export function UpgradeModal({
         if (cancelled) return;
 
         if (data?.ok) {
-          setBillingConfig(data);
           const amount = data?.price?.amount ? String(data.price.amount) : "2.99";
           const currency = data?.price?.currency ? String(data.price.currency).toUpperCase() : "USD";
           setPriceLabel(`${currency} ${amount} / month`);
@@ -116,23 +109,22 @@ export function UpgradeModal({
   const paidActive = authed && billingStatus?.plan === "paid";
   const active = ownerActive || paidActive;
   const activePeriod = periodLabel(billingStatus?.currentPeriodEnd);
-  const cardEnabled = Boolean(billingConfig?.cardPaymentEnabled);
   const planLabel = ownerActive ? "Owner" : paidActive ? "Pro" : "Free";
   const statusLabel = ownerActive ? "Owner access" : prettyStatus(billingStatus?.status);
   const displayPrice = appliedDiscount
     ? `${appliedDiscount.price.currency.toUpperCase()} ${appliedDiscount.price.finalAmount} / month`
     : priceLabel;
 
-  async function startCheckout(method: PayMethod) {
+  async function startCheckout() {
     setError("");
     if (!authed) {
       signIn("google");
       return;
     }
 
-    setLoading(method);
+    setLoading(true);
     try {
-      const res = await fetch(`/api/billing/checkout/${method}`, {
+      const res = await fetch("/api/billing/checkout/crypto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ discountCode: appliedDiscount?.code || undefined }),
@@ -143,7 +135,7 @@ export function UpgradeModal({
     } catch (e: any) {
       setError(e?.message || "Checkout failed");
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   }
 
@@ -160,7 +152,7 @@ export function UpgradeModal({
       return;
     }
 
-    setLoading("crypto");
+    setLoading(true);
     try {
       const res = await fetch("/api/billing/discount", {
         method: "POST",
@@ -175,7 +167,7 @@ export function UpgradeModal({
       setAppliedDiscount(null);
       setError(e?.message || "Invalid discount code");
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   }
 
@@ -187,7 +179,7 @@ export function UpgradeModal({
     }
     if (!appliedDiscount || appliedDiscount.percentOff < 100) return;
 
-    setLoading("crypto");
+    setLoading(true);
     try {
       const res = await fetch("/api/billing/checkout/free", {
         method: "POST",
@@ -200,7 +192,7 @@ export function UpgradeModal({
     } catch (e: any) {
       setError(e?.message || "Free activation failed");
     } finally {
-      setLoading(null);
+      setLoading(false);
     }
   }
 
@@ -311,17 +303,11 @@ export function UpgradeModal({
                 {loading ? t(lang, "starting") : "Activate free Pro"}
               </Button>
             ) : (
-              <div className={`grid gap-2 ${cardEnabled ? "sm:grid-cols-2" : ""}`}>
-                <Button className="gap-2" onClick={() => startCheckout("crypto")} disabled={Boolean(loading)}>
+              <div className="grid gap-2">
+                <Button className="gap-2" onClick={startCheckout} disabled={loading}>
                   <Coins size={16} />
-                  {loading === "crypto" ? t(lang, "starting") : t(lang, "payCrypto")}
+                  {loading ? t(lang, "starting") : t(lang, "payCrypto")}
                 </Button>
-                {cardEnabled ? (
-                  <Button variant="ghost" className="gap-2" onClick={() => startCheckout("card")} disabled={Boolean(loading)}>
-                    <CreditCard size={16} />
-                    {loading === "card" ? t(lang, "starting") : t(lang, "payCard")}
-                  </Button>
-                ) : null}
               </div>
             )}
           </div>

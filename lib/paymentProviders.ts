@@ -1,6 +1,4 @@
 const NOWPAYMENTS_BASE = "https://api.nowpayments.io/v1";
-const PADDLE_LIVE_BASE = "https://api.paddle.com";
-const PADDLE_SANDBOX_BASE = "https://sandbox-api.paddle.com";
 
 function requiredEnv(name: string): string {
   const v = process.env[name];
@@ -35,43 +33,11 @@ async function nowpaymentsPost(path: string, body: any): Promise<any> {
   return await res.json();
 }
 
-function paddleApiBase(apiKey: string): string {
-  return apiKey.includes("_sdbx_") ? PADDLE_SANDBOX_BASE : PADDLE_LIVE_BASE;
-}
-
-async function paddlePost(path: string, body: any): Promise<any> {
-  const apiKey = requiredEnv("PADDLE_API_KEY");
-  const res = await fetch(`${paddleApiBase(apiKey)}${path}`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Paddle-Version": "1",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Paddle request failed: ${res.status} ${txt}`);
-  }
-
-  return await res.json();
-}
-
 export function subscriptionPrice() {
   return {
     amount: process.env.NOWPAYMENTS_PRICE_AMOUNT || "2.99",
     currency: (process.env.NOWPAYMENTS_PRICE_CURRENCY || "usd").toLowerCase(),
   };
-}
-
-export function cardPaymentEnabled(): boolean {
-  return Boolean(process.env.PADDLE_API_KEY && process.env.PADDLE_PRICE_ID && process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN);
-}
-
-export function paddlePriceId(): string {
-  return requiredEnv("PADDLE_PRICE_ID");
 }
 
 export async function createNowpaymentsInvoice(args: {
@@ -95,44 +61,5 @@ export async function createNowpaymentsInvoice(args: {
     customer_email: args.userEmail || undefined,
     is_fixed_rate: true,
     is_fee_paid_by_user: true,
-  });
-}
-
-export async function createPaddleCheckoutTransaction(args: {
-  orderId: string;
-  paymentSessionId: string;
-  userId: string;
-  userEmail?: string | null;
-  discountCode?: string | null;
-  discountPercentOff?: number | null;
-}) {
-  const percentOff = Math.max(0, Math.min(99, Math.round(args.discountPercentOff || 0)));
-  const discount =
-    percentOff > 0
-      ? {
-          amount: String(percentOff),
-          description: `Atlas Assistant ${percentOff}% off${args.discountCode ? ` (${args.discountCode})` : ""}`,
-          type: "percentage",
-          recur: false,
-        }
-      : undefined;
-
-  return paddlePost("/transactions", {
-    items: [{ price_id: paddlePriceId(), quantity: 1 }],
-    collection_mode: "automatic",
-    enable_checkout: true,
-    discount,
-    checkout: {
-      url: `${appUrl()}/paddle-checkout`,
-    },
-    custom_data: {
-      source: "atlas-assistant",
-      orderId: args.orderId,
-      paymentSessionId: args.paymentSessionId,
-      userId: args.userId,
-      userEmail: args.userEmail || undefined,
-      discountCode: args.discountCode || undefined,
-      discountPercentOff: percentOff || undefined,
-    },
   });
 }

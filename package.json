@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:billing": "tsx --test tests/payment-providers.test.ts",
     "db:migrate": "prisma db push --skip-generate",
     "db:generate": "prisma generate",
     "db:seed": "node prisma/seed.mjs",

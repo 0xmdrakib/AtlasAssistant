@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 
-const updatedAt = "May 10, 2026";
+const updatedAt = "September 9, 2026";
 
 export default function RefundPage() {
   return (
@@ -19,7 +19,7 @@ export default function RefundPage() {
             <section>
               <h2 className="font-semibold">Monthly Subscription</h2>
               <p className="mt-1 text-muted">
-                Atlas Assistant Pro is billed at USD 2.99 per month. Card payments are processed by Paddle and crypto payments are processed by NOWPayments.
+                Atlas Assistant Pro costs USD 2.99 per month. Crypto payments are processed by NOWPayments.
               </p>
             </section>
 
@@ -38,9 +38,9 @@ export default function RefundPage() {
             </section>
 
             <section>
-              <h2 className="font-semibold">Access After Cancellation</h2>
+              <h2 className="font-semibold">Paid Access</h2>
               <p className="mt-1 text-muted">
-                If a subscription is canceled, paid access remains available until the current paid period ends unless a refund requires immediate access removal.
+                Paid access remains available until the current paid period ends unless a refund requires immediate access removal.
               </p>
             </section>
 

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Menu, Globe, Search, Check, ChevronDown, LogOut, CreditCard, Shield } from "lucide-react";
+import { Menu, Globe, Search, Check, ChevronDown, LogOut, Sparkles, Shield } from "lucide-react";
 import { Card, Button, Pill } from "@/components/ui";
 import { LANGUAGES, languageByCode } from "@/lib/i18n";
 import { useLanguage } from "@/components/language-provider";
@@ -283,7 +283,7 @@ export function SettingsMenu() {
                 className="inline-flex w-full items-center justify-between rounded-xl border border-soft bg-solid-muted px-3 py-2 text-sm transition focus-ring hover-subtle-2"
               >
                 <span className="inline-flex items-center gap-2">
-                  <CreditCard size={16} />
+                  <Sparkles size={16} />
                   <span>{t(lang, "subscription")}</span>
                 </span>
                 <span className="text-xs text-muted">

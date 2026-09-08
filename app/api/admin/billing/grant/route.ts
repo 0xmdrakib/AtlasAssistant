@@ -37,8 +37,6 @@ export async function POST(req: Request) {
       subscriptionCurrentPeriodStart: now,
       subscriptionCurrentPeriodEnd: end,
       subscriptionProvider: "admin",
-      subscriptionProviderCustomerId: null,
-      subscriptionProviderSubscriptionId: null,
     },
   });
 

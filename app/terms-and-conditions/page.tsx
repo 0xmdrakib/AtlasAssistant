@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 
-const updatedAt = "May 10, 2026";
+const updatedAt = "September 9, 2026";
 
 export default function TermsPage() {
   return (
@@ -33,7 +33,7 @@ export default function TermsPage() {
             <section>
               <h2 className="font-semibold">Subscriptions</h2>
               <p className="mt-1 text-muted">
-                Atlas Assistant Pro costs USD 2.99 per month. Card subscriptions are processed by Paddle. Crypto payments are processed by NOWPayments and provide access for the paid period after payment confirmation.
+                Atlas Assistant Pro costs USD 2.99 per month. Crypto payments are processed by NOWPayments and provide access for the paid period after payment confirmation.
               </p>
             </section>
 

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Check, CreditCard, Coins, Sparkles } from "lucide-react";
+import { Check, Coins, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui";
 
-const updatedAt = "May 10, 2026";
+const updatedAt = "September 9, 2026";
 
 export default function PricingPage() {
   return (
@@ -34,7 +34,7 @@ export default function PricingPage() {
                 href="/?upgrade=pro"
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-3 py-2 text-sm font-medium text-black transition hover:opacity-90 focus-ring"
               >
-                <CreditCard size={16} />
+                <Coins size={16} />
                 Subscribe
               </Link>
             </div>
@@ -53,16 +53,7 @@ export default function PricingPage() {
               ))}
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-soft bg-solid-muted p-4">
-                <div className="flex items-center gap-2 font-medium">
-                  <CreditCard size={16} />
-                  Pay with card
-                </div>
-                <p className="mt-2 text-sm text-muted">
-                  Card subscriptions are processed securely by Paddle.
-                </p>
-              </div>
+            <div className="mt-6 grid gap-3">
               <div className="rounded-xl border border-soft bg-solid-muted p-4">
                 <div className="flex items-center gap-2 font-medium">
                   <Coins size={16} />
