@@ -6,7 +6,8 @@ const base = process.env.UI_TEST_BASE || 'http://127.0.0.1:3000';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 await mkdir('output/checkout', { recursive: true });
 let paid = false, current = null, creates = 0, freeCreates = 0, statusCalls = 0, currencyFailure = false, pollFailure = false;
-let createRelease;
+let createRelease, restoreRelease, gatewayFailure = true, delayRestore = true;
+const checkoutKeys = [];
 const requests = [], pageErrors = [];
 const quote = () => ({ id: 'payment-ui-fixture', status: 'waiting', amount: '2.99', currency: 'usd', discountCode: null, payCurrency: 'usdcbsc', payAmount: '3.123456', payAddress: '0x1111111111111111111111111111111111111111', network: 'BNB Smart Chain (BEP-20)', payinExtraId: '13579', expiresAt: new Date(Date.now() + 900000).toISOString(), activatedAt: null, createdAt: new Date().toISOString() });
 const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -22,12 +23,20 @@ try {
     if (url.pathname === '/api/saved') return json(route, { plan: paid ? 'paid' : 'free', count: 0, limit: paid ? 50 : 10, remaining: paid ? 50 : 10, bookmarks: [], items: [] });
     if (url.pathname === '/api/billing/status') return json(route, { ok: true, plan: paid ? 'paid' : 'free', limits: { summary: paid ? 20 : 5, digest: paid ? 10 : 3 }, remaining: { summary: 3, digest: 2 } });
     if (url.pathname === '/api/billing/currencies') return currencyFailure ? json(route, { ok: false, error: 'Networks temporarily unavailable' }, 503) : json(route, { ok: true, currencies: [{ code: 'usdcbsc', asset: 'USDC', network: 'BNB Smart Chain (BEP-20)', label: 'USDC · BNB Smart Chain (BEP-20)' }, { code: 'usdttrc20', asset: 'USDT', network: 'Tron (TRC-20)', label: 'USDT · Tron (TRC-20)' }] });
-    if (url.pathname === '/api/billing/payments/current') return json(route, { ok: true, payment: current });
+    if (url.pathname === '/api/billing/payments/current') {
+      if (delayRestore) { delayRestore = false; return new Promise((resolve) => { restoreRelease = async () => { await json(route, { ok: true, payment: current }); resolve(); }; }); }
+      return json(route, { ok: true, payment: current });
+    }
     if (url.pathname.startsWith('/api/billing/payments/')) { statusCalls++; return pollFailure ? json(route, { ok: false, error: 'Connection interrupted' }, 503) : json(route, { ok: true, payment: current }); }
     if (url.pathname === '/api/billing/checkout/crypto') {
       const body = req.postDataJSON();
       assert.match(body.requestId, /^[a-f0-9-]{36}$/); assert.equal(body.payCurrency, 'usdcbsc');
       assert.ok(!('amount' in body), 'Price is decided on the server');
+      checkoutKeys.push(body.requestId);
+      if (gatewayFailure) {
+        gatewayFailure = false;
+        return route.fulfill({ status: 502, contentType: 'text/html', body: '<h1>Bad gateway</h1>' });
+      }
       creates++;
       return new Promise((resolve) => { createRelease = async () => { current = quote(); await json(route, { ok: true, payment: current }); resolve(); }; });
     }
@@ -50,9 +59,30 @@ try {
   await page.getByLabel('Coin & network', { exact: true }).waitFor();
   assert.equal(creates, 0, 'Opening pricing must not create a payment');
   assert.ok(await page.getByRole('button', { name: 'Show payment details' }).isDisabled(), 'A network must be selected explicitly');
-  await page.getByLabel('Coin & network', { exact: true }).selectOption('usdcbsc');
+  const networkPicker = page.getByRole('combobox', { name: 'Coin & network', exact: true });
+  await networkPicker.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.getByRole('option', { name: 'USDT · Tron (TRC-20)' }).evaluate((element) => element === document.activeElement), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await networkPicker.getAttribute('aria-expanded'), 'false');
+  await networkPicker.click();
+  const networks = page.getByRole('listbox');
+  assert.equal(await networks.getByRole('img', { name: 'USDC logo' }).count(), 1);
+  assert.equal(await networks.getByRole('img', { name: 'USDT logo' }).count(), 1);
+  await page.screenshot({ path: 'output/checkout/network-picker-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Network options fit on mobile');
+  await page.screenshot({ path: 'output/checkout/network-picker-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.getByRole('option', { name: 'USDC · BNB Smart Chain (BEP-20)' }).click();
+  assert.ok(await page.getByRole('button', { name: 'Show payment details' }).isDisabled(), 'Form is usable while restoring, but cannot create duplicate pending payments');
+  await restoreRelease();
+  await page.getByRole('button', { name: 'Show payment details' }).click();
+  await page.getByRole('alert').filter({ hasText: 'HTTP 502' }).waitFor();
   await page.getByRole('button', { name: 'Show payment details' }).click();
   await waitUntil(() => createRelease);
+  assert.equal(checkoutKeys[0], checkoutKeys[1], 'A gateway error must retry the same order, not create another');
   assert.equal(creates, 1); assert.ok(await page.getByRole('button', { name: 'Preparing checkout…' }).isDisabled());
   await createRelease();
   await page.getByRole('img', { name: 'Payment address QR code' }).waitFor();

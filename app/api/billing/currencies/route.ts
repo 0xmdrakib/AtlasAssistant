@@ -1,12 +1,15 @@
 import { getPaymentCurrencies } from "@/lib/nowpayments";
-import { billingError, billingResponse, billingUser } from "@/lib/billing-api";
+import { billingError } from "@/lib/billing-api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    await billingUser(req);
-    return billingResponse({ ok: true, currencies: await getPaymentCurrencies() });
+    // Available token networks are public pricing data, contain no account data,
+    // and should not open a database session just to render the selector.
+    return Response.json({ ok: true, currencies: await getPaymentCurrencies() }, {
+      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=300" },
+    });
   } catch (error) { return billingError(error); }
 }

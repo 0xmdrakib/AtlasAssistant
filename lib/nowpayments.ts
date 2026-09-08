@@ -5,13 +5,14 @@ import { PaymentError, type PaymentCurrency } from "@/lib/payment-types";
 export type ProviderPayment = Record<string, unknown>;
 const BASE_URL = "https://api.nowpayments.io/v1";
 
-export async function nowpaymentsRequest(path: string, body?: Record<string, unknown>): Promise<any> {
+export async function nowpaymentsRequest(path: string, body?: Record<string, unknown>, revalidate = 0): Promise<any> {
   const key = process.env.NOWPAYMENTS_API_KEY;
   if (!key) throw new PaymentError("CHECKOUT_UNAVAILABLE", "Crypto checkout is temporarily unavailable.", 503);
   let response: Response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
-      method: body ? "POST" : "GET", cache: "no-store", signal: AbortSignal.timeout(15000),
+      method: body ? "POST" : "GET", signal: AbortSignal.timeout(15000),
+      ...(!body && revalidate ? { next: { revalidate } } : { cache: "no-store" as const }),
       headers: { "Content-Type": "application/json", "x-api-key": key },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
@@ -41,6 +42,7 @@ const NETWORKS: Record<string, string> = {
   erc20: "Ethereum (ERC-20)", trc20: "Tron (TRC-20)", bsc: "BNB Smart Chain (BEP-20)", bep20: "BNB Smart Chain (BEP-20)",
   matic: "Polygon", polygon: "Polygon", arb: "Arbitrum", arbitrum: "Arbitrum", op: "Optimism", optimism: "Optimism",
   sol: "Solana", solana: "Solana", avaxc: "Avalanche C-Chain", algo: "Algorand", ton: "TON", base: "Base", near: "NEAR",
+  eth: "Ethereum (ERC-20)", ethereum: "Ethereum (ERC-20)", avax: "Avalanche C-Chain", celo: "Celo", opbnb: "opBNB",
 };
 
 export function stablecoinOptions(merchant: unknown[], detailed: unknown[] = []): PaymentCurrency[] {
@@ -52,7 +54,7 @@ export function stablecoinOptions(merchant: unknown[], detailed: unknown[] = [])
     if (!match) continue;
     const detail = details.get(code) || row;
     const explicit = typeof detail === "object" ? detail?.network || detail?.network_name || detail?.chain : null;
-    const network = NETWORKS[match[2]] || (typeof explicit === "string" ? explicit : "");
+    const network = NETWORKS[match[2]] || (typeof explicit === "string" ? NETWORKS[explicit.toLowerCase()] || explicit : "");
     if (!network) continue; // Never guess the network for a deposit address.
     const asset = match[1].toUpperCase();
     options.set(code, { code, asset, network, label: `${asset} · ${network}` });
@@ -71,7 +73,7 @@ export function getPaymentCurrencies(): Promise<PaymentCurrency[]> {
   if (currencyCache && currencyCache.until > Date.now()) return Promise.resolve(currencyCache.currencies);
   if (loadingCurrencies) return loadingCurrencies;
   loadingCurrencies = Promise.all([
-    nowpaymentsRequest("/merchant/coins"), nowpaymentsRequest("/full-currencies").catch(() => null),
+    nowpaymentsRequest("/merchant/coins", undefined, 300), nowpaymentsRequest("/full-currencies", undefined, 300).catch(() => null),
   ]).then(([merchant, details]) => {
     const currencies = stablecoinOptions(currencyRows(merchant), currencyRows(details));
     if (!currencies.length) throw new PaymentError("NO_PAYMENT_NETWORKS", "No USDT or USDC networks are available right now. Please try again later.", 503);

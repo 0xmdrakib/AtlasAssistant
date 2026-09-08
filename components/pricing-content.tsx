@@ -11,21 +11,10 @@ import { useAppConfig } from "@/components/app-config-provider";
 import { useLanguage } from "@/components/language-provider";
 import { useSavedItems } from "@/components/saved-provider";
 import { TERMINAL_PAYMENT_STATUSES, type EmbeddedPayment, type PaymentCurrency } from "@/lib/payment-types";
+import { PaymentNetworkPicker, TokenIcon } from "@/components/payment-network-picker";
+import { checkoutApi as api, type CheckoutApiError } from "@/lib/checkout-client";
 
 type Discount = { code: string; percentOff: number; price: { finalAmount: string; currency: string } };
-type ApiFailure = Error & { receivedResponse?: boolean; code?: string };
-
-async function api(path: string, body?: unknown) {
-  const response = await fetch(path, {
-    method: body ? "POST" : "GET", cache: "no-store", signal: AbortSignal.timeout(25000),
-    ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
-  });
-  const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.ok) {
-    throw Object.assign(new Error(result?.error || "Unable to load checkout. Please try again."), { receivedResponse: true, code: result?.code });
-  }
-  return result;
-}
 
 export function PricingContent() {
   const { data: session, status } = useSession();
@@ -208,7 +197,7 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
       if (!live.current) return;
       setError((e as Error).message);
       // A transport timeout may have committed. Reuse its key when retrying.
-      if ((e as ApiFailure).receivedResponse) requestId.current = null;
+      if ((e as CheckoutApiError).definitiveFailure) requestId.current = null;
     } finally { if (live.current) setBusy(""); }
   }
 
@@ -235,14 +224,15 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
     </div>
     <div className="space-y-5 p-5 sm:p-6">
       {error ? <p role="alert" className="rounded-xl border border-soft bg-solid-muted p-3 text-sm leading-5">{error}</p> : null}
+      {authed && restoring ? <p role="status" className="flex items-center gap-2 text-xs text-muted"><Loader2 size={14} className="animate-spin" />{bn ? "আগের পেমেন্ট যাচাই হচ্ছে…" : "Checking for an existing payment…"}</p> : null}
       {!authed ? <>
         <p className="text-sm leading-6 text-muted">{bn ? "আপনার অ্যাকাউন্টে Pro যোগ করতে আগে সাইন ইন করুন।" : "Sign in so we can add Pro to your account after payment."}</p>
         <Button className="w-full gap-2 py-3" onClick={() => signIn("google", { callbackUrl: `/pricing${window.location.search}` })}>{bn ? "Google দিয়ে সাইন ইন" : "Continue with Google"}<ArrowRight size={16} /></Button>
-      </> : restoring ? <p role="status" className="flex items-center gap-2 text-sm text-muted"><Loader2 size={16} className="animate-spin" />{bn ? "চেকআউট লোড হচ্ছে…" : "Checking for an existing payment…"}</p> : complete ? <div className="space-y-4">
+      </> : complete ? <div className="space-y-4">
         <div role="status" className="rounded-xl border border-[hsl(var(--accent)/.3)] bg-subtle-2 p-4"><CheckCircle2 className="mb-3 text-[hsl(var(--accent))]" size={28} /><h3 className="font-semibold">{bn ? "পেমেন্ট সম্পূর্ণ হয়েছে" : "Payment complete"}</h3><p className="mt-2 text-sm leading-6 text-muted">{bn ? "আপনার Pro সুবিধাগুলো এখন ব্যবহার করতে পারবেন।" : "Your Pro benefits are ready, including 50 saved posts and higher daily AI limits."}</p></div>
         <Link href="/" className="flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-4 py-3 text-sm font-medium text-black focus-ring">{bn ? "পড়া শুরু করুন" : "Continue reading"}<ArrowRight size={16} /></Link>
       </div> : payment ? <>
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><span className="font-semibold">{asset} · {payment.network || payment.payCurrency}</span><span role="status" className="rounded-full border border-soft bg-solid-muted px-3 py-1 text-xs">{statusLabel}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><span className="flex items-center gap-2 font-semibold"><TokenIcon asset={asset} />{asset} · {payment.network || payment.payCurrency}</span><span role="status" className="rounded-full border border-soft bg-solid-muted px-3 py-1 text-xs">{statusLabel}</span></div>
         {canSend && payment.payAddress && payment.payAmount ? <>
           <div className="flex justify-center rounded-xl border border-soft bg-white p-5"><QRCodeSVG value={payment.payAddress} size={180} marginSize={3} level="M" role="img" aria-label="Payment address QR code" title="Payment address QR code" /></div>
           <PaymentField label={`Send exactly (${asset})`} value={payment.payAmount} copied={copied === "amount"} onCopy={() => void copy(payment.payAmount!, "amount")} />
@@ -265,8 +255,8 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
         <Link href="/" className="inline-flex items-center gap-2 text-sm underline underline-offset-4">Continue reading<ArrowRight size={15} /></Link>
       </div> : <>
         <p className="text-sm leading-6 text-muted">{bn ? "আপনার ওয়ালেটের সঠিক নেটওয়ার্ক বেছে নিন। এখানেই পেমেন্টের ঠিকানা ও QR দেখানো হবে।" : "Choose the network you’ll use in your wallet. Your payment address and QR code will appear here."}</p>
-        <div className="space-y-2"><label htmlFor="payment-network" className="text-sm font-medium">{bn ? "কয়েন ও নেটওয়ার্ক" : "Coin & network"}</label>
-          {networksLoading ? <p role="status" className="flex items-center gap-2 py-3 text-sm text-muted"><Loader2 size={16} className="animate-spin" />Loading available networks…</p> : networkError ? <div className="space-y-2"><p role="alert" className="text-sm text-muted">{networkError}</p><Button variant="ghost" onClick={() => void loadNetworks()}>Retry networks</Button></div> : <select id="payment-network" value={selected} disabled={Boolean(busy)} onChange={(event) => { setSelected(event.target.value); requestId.current = null; setError(""); }} className="w-full min-w-0 rounded-xl border border-soft bg-solid-muted p-3 text-sm focus-ring"><option value="">{bn ? "নেটওয়ার্ক বেছে নিন" : "Select a network"}</option>{currencies.map((currency) => <option key={currency.code} value={currency.code}>{currency.label}</option>)}</select>}
+        <div className="space-y-2"><div className="text-sm font-medium">{bn ? "কয়েন ও নেটওয়ার্ক" : "Coin & network"}</div>
+          {networksLoading ? <p role="status" className="flex items-center gap-2 py-3 text-sm text-muted"><Loader2 size={16} className="animate-spin" />Loading available networks…</p> : networkError ? <div className="space-y-2"><p role="alert" className="text-sm text-muted">{networkError}</p><Button variant="ghost" onClick={() => void loadNetworks()}>Retry networks</Button></div> : <PaymentNetworkPicker currencies={currencies} value={selected} disabled={Boolean(busy)} label={bn ? "কয়েন ও নেটওয়ার্ক" : "Coin & network"} placeholder={bn ? "নেটওয়ার্ক বেছে নিন" : "Select a network"} onChange={(value) => { setSelected(value); requestId.current = null; setError(""); }} />}
         </div>
         <div className="space-y-2"><label htmlFor="discount-code" className="text-xs text-muted">{bn ? "ডিসকাউন্ট কোড (যদি থাকে)" : "Discount code (optional)"}</label><div className="flex gap-2"><input id="discount-code" value={code} maxLength={80} autoComplete="off" disabled={Boolean(busy)} onChange={(event) => { setCode(event.target.value.toUpperCase()); setDiscount(null); requestId.current = null; }} className="min-w-0 flex-1 rounded-xl border border-soft bg-solid-muted px-3 py-2 text-sm focus-ring" placeholder="Enter code" /><Button variant="ghost" disabled={!code.trim() || Boolean(busy)} onClick={() => void applyDiscount()}>{busy === "discount" ? <Loader2 size={16} className="animate-spin" /> : "Apply"}</Button></div>
           {discount ? <p role="status" className="text-xs text-[hsl(var(--accent))]">{discount.percentOff}% off applied · {discount.code}</p> : null}
