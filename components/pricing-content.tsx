@@ -10,7 +10,7 @@ import { Button, Card } from "@/components/ui";
 import { useAppConfig } from "@/components/app-config-provider";
 import { useLanguage } from "@/components/language-provider";
 import { useSavedItems } from "@/components/saved-provider";
-import { TERMINAL_PAYMENT_STATUSES, type EmbeddedPayment, type PaymentCurrency } from "@/lib/payment-types";
+import { isExpiredUnpaidQuote, TERMINAL_PAYMENT_STATUSES, type EmbeddedPayment, type PaymentCurrency } from "@/lib/payment-types";
 import { PaymentNetworkPicker, TokenIcon } from "@/components/payment-network-picker";
 import { checkoutApi as api, type CheckoutApiError } from "@/lib/checkout-client";
 
@@ -127,7 +127,11 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
       if (!active) void loadNetworks();
       const id = initialId.current;
       void api(id ? `/api/billing/payments/${encodeURIComponent(id)}` : "/api/billing/payments/current")
-        .then((data) => { if (live.current && data.payment) remember(data.payment); })
+        .then((data) => {
+          if (!live.current) return;
+          // An old payment link must not pin a verified expired, unpaid quote.
+          remember(data.payment && !isExpiredUnpaidQuote(data.payment) ? data.payment : null);
+        })
         .catch((e) => { if (live.current) setError((e as Error).message); })
         .finally(() => { if (live.current) setRestoring(false); });
     } else if (!authed) setRestoring(false);
@@ -219,7 +223,7 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
   const terminal = payment ? TERMINAL_PAYMENT_STATUSES.has(payment.status) : false;
   const asset = payment?.payCurrency?.toUpperCase().match(/^(USDT|USDC)/)?.[0] || payment?.payCurrency?.toUpperCase() || "Crypto";
   const statusLabels: Record<string, string> = { creating: "Preparing payment", waiting: "Awaiting payment", confirming: "Confirming on the network", confirmed: "Transfer confirmed · finalizing", sending: "Finalizing payment", partially_paid: "Partial payment received", finished: "Payment complete", expired: "Payment expired", failed: "Payment failed", refunded: "Payment refunded" };
-  const statusLabel = payment ? statusLabels[payment.status] || "Checking payment" : "";
+  const statusLabel = payment ? expiredQuote && payment.status === "waiting" ? "Quote expired" : statusLabels[payment.status] || "Checking payment" : "";
 
   return <Card id="checkout" className="min-w-0 overflow-hidden border-[hsl(var(--accent)/.35)] bg-solid-surface shadow-xl">
     <div className="flex items-start justify-between gap-3 border-b border-soft p-5 sm:p-6">

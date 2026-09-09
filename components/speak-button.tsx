@@ -3,77 +3,25 @@
 import * as React from "react";
 import { Volume2, Square } from "lucide-react";
 import { Button } from "@/components/ui";
+import { useAudioPlayer } from "@/components/audio-player-provider";
 
-let stopActivePlayback: (() => void) | null = null;
-
-export function SpeakButton({
-  text,
-  lang,
-  labelSpeak = "Listen",
-  labelStop = "Stop audio",
-}: {
-  text: string;
-  lang: string;
-  labelSpeak?: string;
-  labelStop?: string;
+export function SpeakButton({ text, lang, labelSpeak = "Listen", labelStop = "Stop audio" }: {
+  text: string; lang: string; labelSpeak?: string; labelStop?: string;
 }) {
-  const [speaking, setSpeaking] = React.useState(false);
-  const [supported, setSupported] = React.useState(false);
-  const utterance = React.useRef<SpeechSynthesisUtterance | null>(null);
+  const player = useAudioPlayer();
+  const id = React.useId();
+  // Subscribe to ownership only: the playback clock must not re-render every feed card.
+  const supported = React.useSyncExternalStore(player.subscribe, () => player.getSnapshot().supported, () => false);
+  const active = React.useSyncExternalStore(player.subscribe, () => {
+    const state = player.getSnapshot();
+    return state.track?.id === id && state.status !== "ended";
+  }, () => false);
+  React.useEffect(() => () => player.stopTrack(id), [player, id, text, lang]);
 
-  const stop = React.useCallback(() => {
-    // Only the button that owns the current audio may cancel it.
-    if (stopActivePlayback === stop) {
-      stopActivePlayback = null;
-      window.speechSynthesis.cancel();
-    }
-    utterance.current = null;
-    setSpeaking(false);
-  }, []);
-
-  React.useEffect(() => {
-    setSupported("speechSynthesis" in window && "SpeechSynthesisUtterance" in window);
-    return () => {
-      if (stopActivePlayback === stop) stop();
-    };
-  }, [stop]);
-
-  function speak() {
-    if (!supported) return;
-    if (!text.trim()) return;
-
-    stopActivePlayback?.();
-
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang || "en-US";
-
-    const finish = () => {
-      if (utterance.current !== u) return;
-      utterance.current = null;
-      if (stopActivePlayback === stop) stopActivePlayback = null;
-      setSpeaking(false);
-    };
-    u.onend = finish;
-    u.onerror = finish;
-
-    utterance.current = u;
-    stopActivePlayback = stop;
-    setSpeaking(true);
-    try { window.speechSynthesis.speak(u); } catch { finish(); }
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      className="h-10 w-10 shrink-0 gap-2 px-0"
-      onClick={speaking ? stop : speak}
-      aria-label={speaking ? labelStop : labelSpeak}
-      aria-pressed={speaking}
-      title={speaking ? labelStop : labelSpeak}
-      disabled={!supported || !text.trim()}
-    >
-      {speaking ? <Square size={16} /> : <Volume2 size={16} />}
-    </Button>
-  );
+  return <Button type="button" variant="ghost" className="h-10 w-10 shrink-0 gap-2 px-0"
+    data-speech-owner={id} onClick={() => active ? player.close() : player.start({ id, text, lang })}
+    aria-label={active ? labelStop : labelSpeak} aria-pressed={active} title={active ? labelStop : labelSpeak}
+    disabled={!supported || !text.trim()}>
+    {active ? <Square size={16} /> : <Volume2 size={16} />}
+  </Button>;
 }

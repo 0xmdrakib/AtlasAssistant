@@ -11,7 +11,7 @@ process.env.OWNER_EMAILS = ""; process.env.NOWPAYMENTS_API_KEY = "local-test-onl
 process.env.NOWPAYMENTS_IPN_SECRET = "local-signature-test-only";
 process.env.NOWPAYMENTS_PRICE_AMOUNT = "2.99"; process.env.NOWPAYMENTS_PRICE_CURRENCY = "usd";
 const { prisma } = await import("../lib/prisma");
-const { beginCheckout, applyPaymentUpdate, readPayment } = await import("../lib/checkout");
+const { beginCheckout, applyPaymentUpdate, readPayment, currentPayment } = await import("../lib/checkout");
 const { canonicalJson, stablecoinOptions, verifyNowpaymentsSignature } = await import("../lib/nowpayments");
 const { POST: receiveWebhook } = await import("../app/api/webhooks/nowpayments/route");
 const { addOneMonth, getBillingStatus, planForSubscription } = await import("../lib/billing");
@@ -74,6 +74,21 @@ const codeIs = (code: string) => (error: any) => error.code === code;
 
 test("currency choices include only the merchant's supported stablecoin networks", () => {
   assert.deepEqual(stablecoinOptions(["usdcbsc", "usdttrc20", "btc", "usdtfake", "usdt"], ["usdterc20"]).map((row) => row.code), ["usdcbsc", "usdttrc20"]);
+});
+
+test("pricing does not restore expired unpaid quotes, but reconciles missed transfers and permits late fulfillment", async () => {
+  const userId = await user(); const payment = await checkout(userId);
+  const row = await prisma.paymentSession.findUniqueOrThrow({ where: { id: payment.id } });
+  const expired = { ...provider.get(row.nowpaymentsPaymentId!), expiration_estimate_date: new Date(Date.now() - 1000).toISOString() };
+  provider.set(row.nowpaymentsPaymentId!, expired);
+  await applyPaymentUpdate(expired);
+  assert.equal(await currentPayment(userId), null);
+  assert.equal((await readPayment(userId, payment.id, false)).status, "waiting", "Quote expiry must not mark the payment failed or delete it");
+  provider.set(row.nowpaymentsPaymentId!, { ...expired, payment_status: "confirming", actually_paid: row.payAmount });
+  await prisma.paymentSession.update({ where: { id: payment.id }, data: { lastPolledAt: null } });
+  assert.equal((await currentPayment(userId))?.status, "confirming", "Provider reconciliation recovers a missed callback");
+  await applyPaymentUpdate({ ...expired, payment_status: "finished", actually_paid: row.payAmount }, true);
+  assert.ok((await readPayment(userId, payment.id, false)).activatedAt, "Late settlement still activates Pro");
 });
 
 test("valid signed callbacks are accepted and tampered signatures are rejected", () => {

@@ -13,6 +13,8 @@
     "test:database-runtime": "tsx --test tests/database-runtime.test.ts",
     "test:checkout": "tsx --test tests/checkout.test.ts",
     "test:checkout-ui": "node tests/checkout-interactions.mjs",
+    "test:speech": "tsx --test tests/speech-player.test.ts",
+    "test:speech-ui": "node tests/speech-interactions.mjs",
     "test:saved": "tsx --test tests/saved-items.test.ts",
     "test:saved-ui-state": "tsx --test tests/saved-state.test.ts",
     "test:saved-interactions": "node tests/saved-interactions.mjs",

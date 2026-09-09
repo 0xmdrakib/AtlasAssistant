@@ -121,12 +121,18 @@ try {
 
   paid = false; current = { ...quote(), expiresAt: new Date(Date.now() - 1000).toISOString() };
   await page.goto(base + '/pricing?payment=payment-ui-fixture', { waitUntil: 'networkidle' });
-  await page.getByText(/This quote has expired/).waitFor();
+  await page.getByRole('combobox', { name: 'Coin & network', exact: true }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.has('payment'), false, 'Expired unpaid links return to a fresh checkout');
   assert.equal(await page.getByRole('img', { name: 'Payment address QR code' }).count(), 0);
-  current = { ...current, status: 'expired' };
-  await page.getByRole('button', { name: 'Check payment status' }).click();
-  await page.getByRole('button', { name: 'Start a new checkout' }).waitFor();
-  await page.getByRole('button', { name: 'Start a new checkout' }).click();
+  await page.goto(base + '/pricing', { waitUntil: 'networkidle' });
+  await page.getByRole('combobox', { name: 'Coin & network', exact: true }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.has('payment'), false, 'Default restore also ignores a stale quote');
+  current = { ...current, status: 'confirming', hasReceivedFunds: true };
+  await page.goto(base + '/pricing?payment=payment-ui-fixture', { waitUntil: 'networkidle' });
+  await page.getByText('Confirming on the network', { exact: true }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('payment'), current.id, 'Received transfers remain visible after quote expiry');
+  current = { ...current, status: 'expired', hasReceivedFunds: false };
+  await page.goto(base + '/pricing?payment=payment-ui-fixture', { waitUntil: 'networkidle' });
   await page.getByRole('combobox', { name: 'Coin & network', exact: true }).click();
   await page.getByRole('option', { name: 'USDT · Tron (TRC-20)' }).click();
   await page.getByLabel('Discount code (optional)').fill('HALF');

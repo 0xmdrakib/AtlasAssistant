@@ -5,7 +5,7 @@ import { addOneMonth, planForSubscription } from "@/lib/billing";
 import { discountPrice } from "@/lib/discounts";
 import { subscriptionPrice } from "@/lib/paymentProviders";
 import { assertPaymentMinimum, canonicalJson, createNowpaymentsPayment, getPaymentCurrencies, getPaymentMinimum, nowpaymentsRequest, paymentExpiry, type ProviderPayment } from "@/lib/nowpayments";
-import { PaymentError, TERMINAL_PAYMENT_STATUSES, type EmbeddedPayment } from "@/lib/payment-types";
+import { isExpiredUnpaidQuote, PaymentError, TERMINAL_PAYMENT_STATUSES, type EmbeddedPayment } from "@/lib/payment-types";
 
 type Tx = Prisma.TransactionClient;
 const PROGRESS: Record<string, number> = { creating: 0, pending: 0, waiting: 1, confirming: 2, confirmed: 3, sending: 4, partially_paid: 4, finished: 5 };
@@ -17,6 +17,7 @@ export function paymentDto(row: PaymentSession): EmbeddedPayment {
     discountCode: row.discountCode, payCurrency: row.payCurrency, payAmount: row.payAmount, payAddress: row.payAddress,
     network: row.network, payinExtraId: row.payinExtraId,
     expiresAt: row.paymentExpiresAt?.toISOString() || null, activatedAt: row.activatedAt?.toISOString() || null,
+    hasReceivedFunds: Boolean(positive((row.rawProviderData as ProviderPayment | null)?.actually_paid)),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -190,5 +191,10 @@ export async function readPayment(userId: string, id: string, reconcile = true) 
 
 export async function currentPayment(userId: string) {
   const row = await prisma.paymentSession.findFirst({ where: { userId, requestKey: { not: null }, status: { in: ["creating", "waiting", "confirming", "confirmed", "sending", "partially_paid"] }, createdAt: { gte: new Date(Date.now() - 86400000) } }, orderBy: { createdAt: "desc" } });
-  return row ? paymentDto(row) : null;
+  if (!row) return null;
+  let payment = paymentDto(row);
+  // Only stale quotes need a provider round trip on entry. A transfer may have
+  // arrived since the last webhook, so check before returning a fresh form.
+  if (isExpiredUnpaidQuote(payment)) payment = await readPayment(userId, row.id);
+  return isExpiredUnpaidQuote(payment) ? null : payment;
 }

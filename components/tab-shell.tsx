@@ -52,7 +52,7 @@ export function TabShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <nav className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
+      <nav aria-label="News categories" className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
         {tabs.map((tab) => {
           const active =
             pathname === tab.href ||
@@ -64,7 +64,7 @@ export function TabShell({ children }: { children: React.ReactNode }) {
               key={tab.href}
               href={qs ? `${tab.href}?${qs}` : tab.href}
               className={cn(
-                "inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm transition focus-ring sm:w-auto sm:justify-start",
+                "inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm transition focus-ring sm:w-auto sm:flex-auto",
                 active
                   ? "border-[hsl(var(--accent)/.35)] bg-glass text-[hsl(var(--fg))]"
                   : "border-soft text-muted hover-subtle"
