@@ -5,8 +5,8 @@ import { Volume2, Square } from "lucide-react";
 import { Button } from "@/components/ui";
 import { useAudioPlayer } from "@/components/audio-player-provider";
 
-export function SpeakButton({ text, lang, labelSpeak = "Listen", labelStop = "Stop audio" }: {
-  text: string; lang: string; labelSpeak?: string; labelStop?: string;
+export function SpeakButton({ text, lang, title, labelSpeak = "Listen", labelStop = "Stop audio" }: {
+  text: string; lang: string; title?: string; labelSpeak?: string; labelStop?: string;
 }) {
   const player = useAudioPlayer();
   const id = React.useId();
@@ -19,7 +19,7 @@ export function SpeakButton({ text, lang, labelSpeak = "Listen", labelStop = "St
   React.useEffect(() => () => player.stopTrack(id), [player, id, text, lang]);
 
   return <Button type="button" variant="ghost" className="h-10 w-10 shrink-0 gap-2 px-0"
-    data-speech-owner={id} onClick={() => active ? player.close() : player.start({ id, text, lang })}
+    data-speech-owner={id} onClick={() => active ? player.close() : player.start({ id, text, lang, title })}
     aria-label={active ? labelStop : labelSpeak} aria-pressed={active} title={active ? labelStop : labelSpeak}
     disabled={!supported || !text.trim()}>
     {active ? <Square size={16} /> : <Volume2 size={16} />}

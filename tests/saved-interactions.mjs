@@ -22,7 +22,7 @@ try {
     window.__audioTest = { spoken: [], cancels: 0 };
     window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
-      speak(u) { window.__audioTest.spoken.push({ text: u.text, lang: u.lang }); },
+      speak(u) { window.__audioTest.spoken.push({ text: u.text, lang: u.lang }); queueMicrotask(() => u.onstart?.({})); },
       cancel() { window.__audioTest.cancels++; },
     } });
   });
@@ -89,6 +89,7 @@ try {
   await card('A').getByRole('button', { name: 'Speak', exact: true }).click();
   await page.getByRole('button', { name: 'Stop', exact: true }).waitFor();
   await card('B').getByRole('button', { name: 'Speak', exact: true }).click();
+  await page.locator('[data-audio-player][data-playback="playing"]').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Stop', exact: true }).count(), 1);
   assert.equal((await page.evaluate(() => window.__audioTest)).spoken.at(-1).text, 'Story B. Summary for story B.');
 

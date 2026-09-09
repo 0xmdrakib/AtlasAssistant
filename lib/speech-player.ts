@@ -1,6 +1,6 @@
 import { speechChunk, speechTimeline, wordAtCharacter, wordAtTime, type SpeechTimeline } from "@/lib/speech-timeline";
 
-export type SpeechTrack = { id: string; text: string; lang: string };
+export type SpeechTrack = { id: string; text: string; lang: string; title?: string };
 export type SpeechRate = 1 | 2 | 3;
 export type SpeechState = {
   supported: boolean; track: SpeechTrack | null;
@@ -24,6 +24,9 @@ export class SpeechPlayer {
   private generation = 0;
   private interval: ReturnType<typeof setInterval> | null = null;
   private startup: ReturnType<typeof setTimeout> | null = null;
+  private restart: ReturnType<typeof setTimeout> | null = null;
+  private restartAfter = 0;
+  private silentSince: number | null = null;
   private anchor = { position: 0, at: 0, end: 0 };
 
   constructor(private environment = browserEnvironment) {}
@@ -34,14 +37,20 @@ export class SpeechPlayer {
   private clearTimers() {
     if (this.interval !== null) clearInterval(this.interval);
     if (this.startup !== null) clearTimeout(this.startup);
-    this.interval = null; this.startup = null;
+    if (this.restart !== null) clearTimeout(this.restart);
+    this.interval = null; this.startup = null; this.restart = null;
   }
   private cancel() {
+    const wasActive = Boolean(this.current || this.restart || this.env?.synth.speaking || this.env?.synth.paused);
     this.generation++; this.current = null; this.clearTimers();
+    this.silentSince = null;
+    // Let an in-flight platform cancellation finish before replacing speech.
+    // Rapid seek/speed clicks replace this scheduled start, never queue more audio.
+    if (wasActive && this.env) this.restartAfter = this.env.now() + 80;
     try {
       this.env?.synth.cancel();
       // cancel() does not clear the global synthesis paused state.
-      if (this.env?.synth.paused) this.env.synth.resume();
+      this.env?.synth.resume?.();
     } catch { /* Closing must always reset local playback, including on errors. */ }
   }
   close = () => { this.cancel(); this.timeline = null; this.set({ ...EMPTY_SPEECH, supported: Boolean(this.env) }); };
@@ -58,6 +67,16 @@ export class SpeechPlayer {
 
   private tick = () => {
     if (this.state.status !== "playing" || !this.env) return;
+    if (this.env.synth.paused === true) {
+      this.cancel(); this.set({ status: "paused" }); return;
+    }
+    // Never keep advancing the UI indefinitely after the engine silently stops.
+    if (this.env.synth.speaking === false && !this.env.synth.pending) {
+      this.silentSince ??= this.env.now();
+      if (this.env.now() - this.silentSince >= 1000) this.fail("The browser stopped the audio. Press play to continue.");
+      return;
+    }
+    this.silentSince = null;
     const position = Math.min(this.anchor.end, this.anchor.position + Math.max(0, this.env.now() - this.anchor.at) / 1000 * this.state.rate);
     this.set({ position });
   };
@@ -75,7 +94,7 @@ export class SpeechPlayer {
     const generation = this.generation;
     const valid = () => this.generation === generation && this.current === utterance;
     this.current = utterance;
-    utterance.lang = this.state.track.lang || "en-US"; utterance.rate = this.state.rate;
+    utterance.lang = this.state.track.lang || "en-US"; utterance.rate = this.state.rate; utterance.volume = 1;
     const voices = this.env.synth.getVoices?.() || [];
     const voice = voices.find((voice) => voice.lang.toLowerCase() === utterance.lang.toLowerCase());
     if (voice) utterance.voice = voice;
@@ -94,9 +113,8 @@ export class SpeechPlayer {
     };
     utterance.onpause = () => {
       if (!valid() || this.state.status === "paused") return;
-      this.tick(); this.clearTimers(); this.set({ status: "paused" });
+      this.clearTimers(); this.set({ status: "paused" });
     };
-    utterance.onresume = () => { if (valid()) { this.set({ status: "playing" }); this.beginClock(); } };
     utterance.onend = () => {
       if (!valid()) return;
       this.current = null; this.clearTimers();
@@ -113,22 +131,24 @@ export class SpeechPlayer {
         : event.error === "not-allowed" ? "Press play to allow audio in this browser." : "Audio could not play. Press play to try again.";
       this.fail(message);
     };
-    this.startup = setTimeout(() => { if (valid() && this.state.status === "loading") this.fail("The browser voice did not start. Press play to try again."); }, 12000);
-    try { this.env.synth.speak(utterance); } catch { this.fail("Audio could not play. Press play to try again."); }
+    const speak = () => {
+      this.restart = null;
+      if (!valid() || !this.env) return;
+      this.startup = setTimeout(() => { if (valid() && this.state.status === "loading") this.fail("The browser voice did not start. Press play to try again."); }, 12000);
+      try { this.env.synth.resume?.(); this.env.synth.speak(utterance); }
+      catch { this.fail("Audio could not play. Press play to try again."); }
+    };
+    const delay = Math.max(0, this.restartAfter - this.env.now());
+    if (delay) this.restart = setTimeout(speak, delay); else speak();
   }
 
   toggle = () => {
     if (!this.state.track || !this.env || !this.timeline) return;
     if (this.state.status === "loading") { this.cancel(); this.set({ status: "paused" }); return; }
     if (this.state.status === "playing") {
-      this.tick(); this.clearTimers(); this.set({ status: "paused" });
-      try {
-        this.env.synth.pause();
-        if (!this.env.synth.speaking && !this.env.synth.paused) this.cancel();
-      } catch { this.cancel(); }
-    } else if (this.state.status === "paused" && this.current && (this.env.synth.paused || this.env.synth.speaking)) {
-      try { this.set({ status: "playing" }); this.beginClock(); this.env.synth.resume(); }
-      catch { this.seek(this.state.position, true); }
+      // Native pause/resume can leave an engine silent after seeking or changing
+      // rate. Keep the position ourselves and resume with a fresh utterance.
+      this.tick(); this.cancel(); this.set({ status: "paused" });
     } else this.seek(this.state.status === "ended" ? 0 : this.state.position, true);
   };
 

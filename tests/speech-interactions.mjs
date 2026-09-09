@@ -51,6 +51,9 @@ try {
   await player.getByRole('button', { name: 'Play audio', exact: true }).waitFor();
   await player.getByRole('button', { name: 'Back 10 seconds' }).click();
   assert.ok(Number(await slider.inputValue()) < 1);
+  await slider.focus(); await page.keyboard.press('ArrowRight');
+  assert.ok(Number(await slider.inputValue()) > 9, 'Keyboard seeking must cross word boundaries');
+  await page.keyboard.press('ArrowLeft'); assert.ok(Number(await slider.inputValue()) < 1);
   for (const speed of [1, 2, 3]) await player.getByRole('button', { name: `Playback speed: ${speed}x` }).click();
   await player.getByRole('button', { name: 'Playback speed: 1x' }).waitFor();
   await player.getByRole('button', { name: 'Play audio', exact: true }).click();
@@ -63,6 +66,7 @@ try {
   await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width * .5, bounds.y + bounds.height / 2, { steps: 5 }); await page.mouse.up();
   assert.ok(Number(await slider.inputValue()) > Number(await slider.getAttribute('max')) * .4, 'Dragging seeks through the story');
   await card('B').getByRole('button', { name: 'Speak', exact: true }).click();
+  await page.locator('[data-audio-player][data-playback="playing"]').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Stop', exact: true }).count(), 1);
   assert.match(await page.evaluate(() => window.__speech.spoken.at(-1).text), /^Science report B/);
   await player.getByRole('button', { name: 'Playback speed: 1x' }).click();
@@ -71,6 +75,7 @@ try {
   assert.equal(await card('B').getByRole('button', { name: 'Speak', exact: true }).evaluate((element) => element === document.activeElement), true, 'Closing restores keyboard focus to the source');
   await card('B').getByRole('button', { name: 'Speak', exact: true }).click();
   await player.getByRole('button', { name: 'Playback speed: 1x' }).waitFor();
+  await page.locator('[data-audio-player][data-playback="playing"]').waitFor();
   assert.ok(Number(await slider.inputValue()) < 1, 'Reopening resets the story and speed');
   for (const width of [1280, 768, 375, 320]) {
     await page.setViewportSize({ width, height: 900 });
@@ -79,6 +84,8 @@ try {
     assert.ok(Math.abs(box.x + box.width / 2 - width / 2) < 1, 'Player stays centered');
     assert.ok(box.y + box.height <= 890 && box.y + box.height >= 875, 'Player floats near the bottom');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow');
+    assert.ok((await slider.boundingBox()).height >= 28, 'Seeking has a usable touch area');
+    await player.getByText('Science report B', { exact: true }).waitFor();
     const nav = page.getByRole('navigation', { name: 'News categories' });
     const navBox = await nav.boundingBox();
     if (width >= 640) {
@@ -86,8 +93,11 @@ try {
       assert.ok(Math.abs(first.x - navBox.x) < 1);
       assert.ok(Math.abs(last.x + last.width - navBox.x - navBox.width) < 1, 'Categories span the full card width');
     }
-    await page.screenshot({ path: `output/speech/player-${width}.png`, fullPage: false });
+    await page.screenshot({ path: `output/speech/player-${width}.png`, fullPage: false, animations: 'disabled' });
   }
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await page.screenshot({ path: 'output/speech/player-dark-mobile.png' });
   await player.getByRole('button', { name: 'Pause audio' }).click();
   await page.keyboard.press('Escape'); assert.equal(await player.count(), 0);
   assert.deepEqual(errors, []);

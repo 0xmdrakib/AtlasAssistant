@@ -426,6 +426,7 @@ export function Feed({ section, initialData }: { section: Section; initialData?:
             {digest ? (
               <SpeakButton
                 text={digestSpeakText}
+                title={t(lang, "aiSummary")}
                 lang={speechLang}
                 labelSpeak={t(lang, "speak")}
                 labelStop={t(lang, "stop")}
@@ -511,7 +512,7 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
                     <div className="mt-1 text-lg font-semibold leading-snug">{it.title}</div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <SpeakButton text={`${it.title}. ${it.summary}`} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
+                    <SpeakButton text={`${it.title}. ${it.summary}`} title={it.title} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
                   </div>
                 </div>
                 <div className="mt-2 text-sm text-muted">{it.summary}</div>
@@ -551,6 +552,7 @@ ${keyPoints.map((p, i) => `${i + 1}) ${p}`).join("\n")}`
                       {it.aiSummary ? (
                         <SpeakButton
                           text={itemSpeakText}
+                          title={it.title}
                           lang={speechLang}
                           labelSpeak={t(lang, "speak")}
                           labelStop={t(lang, "stop")}

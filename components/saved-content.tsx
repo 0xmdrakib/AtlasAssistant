@@ -75,7 +75,7 @@ export function SavedContent() {
               <h2 className="mt-2 text-lg font-semibold leading-snug">{item.title}</h2>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <SpeakButton text={`${item.title}. ${item.summary}`} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
+              <SpeakButton text={`${item.title}. ${item.summary}`} title={item.title} lang={speechLang} labelSpeak={t(lang, "speak")} labelStop={t(lang, "stop")} />
               <SaveButton item={item} />
             </div>
           </div>
