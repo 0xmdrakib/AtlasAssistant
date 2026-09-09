@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { subscriptionPrice } from "../lib/paymentProviders";
-import { assertPaymentMinimum, createNowpaymentsPayment, currenciesForAmount } from "../lib/nowpayments";
+import { assertPaymentMinimum, createNowpaymentsPayment, currenciesForAmount, getPaymentMinimum } from "../lib/nowpayments";
 
 const envKeys = [
   "APP_BASE_URL",
@@ -45,6 +45,8 @@ test("crypto checkout creates a direct payment with its callback and server-pric
     assert.equal(body.price_currency, "usd");
     assert.equal(body.order_id, "test-order");
     assert.equal(body.pay_currency, "usdttrc20");
+    assert.equal(body.is_fixed_rate, false);
+    assert.equal(body.is_fee_paid_by_user, false);
     assert.match(body.order_description, /HALF/);
     assert.equal(body.ipn_callback_url, "https://atlas.example/api/webhooks/nowpayments");
     assert.equal(body.success_url, undefined);
@@ -88,6 +90,40 @@ test("network choices include only verified minimums supported by the payable am
   ];
   assert.deepEqual(currenciesForAmount(networks, "2.99").map((row) => row.code), ["usdcbsc"]);
   assert.deepEqual(currenciesForAmount(networks, "0.50"), []);
+});
+
+test("minimum checks and direct checkout use the same floating rate and merchant fees", async () => {
+  const minimumModes: string[] = [];
+  mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/v1/merchant/coins") return Response.json({ selectedCurrencies: ["usdcbase"] });
+    if (url.pathname === "/v1/full-currencies") return Response.json({ currencies: [] });
+    if (url.pathname === "/v1/min-amount") {
+      const fixed = url.searchParams.get("is_fixed_rate");
+      const buyer = url.searchParams.get("is_fee_paid_by_user");
+      minimumModes.push(`${fixed}:${buyer}`);
+      assert.equal(url.searchParams.get("currency_from"), "usdcbase");
+      assert.equal(url.searchParams.get("fiat_equivalent"), "usd");
+      assert.equal(url.searchParams.has("currency_to"), false);
+      return Response.json({ fiat_equivalent: fixed === "true" ? 8.25 : 0.016, currency_to: "false" });
+    }
+    assert.equal(url.pathname, "/v1/payment");
+    const body = JSON.parse(String(init?.body));
+    assert.equal(`${body.is_fixed_rate}:${body.is_fee_paid_by_user}`, minimumModes[0]);
+    assert.equal(body.price_amount, 2.99);
+    return Response.json({ payment_id: "floating-test" });
+  });
+  const floating = await getPaymentMinimum("usdcbase");
+  assert.doesNotThrow(() => assertPaymentMinimum("2.99", floating));
+  assert.equal(floating.settlementCurrency, undefined);
+  await createNowpaymentsPayment({ orderId: "rate-test", amount: "2.99", currency: "usd", payCurrency: "usdcbase" });
+  // Cached comparison results must never replace the checkout policy's minimum.
+  const fixedUser = await getPaymentMinimum("usdcbase", "fixed-user");
+  const fixedMerchant = await getPaymentMinimum("usdcbase", "fixed-merchant");
+  assert.throws(() => assertPaymentMinimum("2.99", fixedUser), /at least USD 8.25/);
+  assert.throws(() => assertPaymentMinimum("2.99", fixedMerchant), /at least USD 8.25/);
+  assert.equal((await getPaymentMinimum("usdcbase")).minimum, 0.016);
+  assert.deepEqual(minimumModes, ["false:false", "true:true", "true:false"]);
 });
 
 test("crypto checkout requires its API key before contacting the provider", async () => {

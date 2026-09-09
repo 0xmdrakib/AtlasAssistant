@@ -244,7 +244,7 @@ function Checkout({ authed, active }: { authed: boolean; active: boolean }) {
           <PaymentField label="Payment address" value={payment.payAddress} copied={copied === "address"} onCopy={() => void copy(payment.payAddress!, "address")} />
           {payment.payinExtraId ? <PaymentField label="Required memo / destination tag" value={payment.payinExtraId} copied={copied === "memo"} onCopy={() => void copy(payment.payinExtraId!, "memo")} /> : null}
           <p className="rounded-xl bg-solid-muted p-3 text-xs leading-5">Send only <strong>{asset}</strong> on <strong>{payment.network}</strong>. The QR contains the address; enter the exact amount{payment.payinExtraId ? " and required memo" : ""} in your wallet.</p>
-          <p className="text-xs leading-5 text-muted">The amount above includes payment processing fees. Your wallet may charge a separate network fee.</p>
+          <p className="text-xs leading-5 text-muted">Send the exact amount shown. Your wallet may charge a separate network fee.</p>
         </> : <div className="rounded-xl border border-soft bg-solid-muted p-4 text-sm leading-6">
           {payment.status === "partially_paid" ? "Only part of the payment was received. Contact billing support with your payment ID before sending more." : expiredQuote && payment.status === "waiting" ? "This quote has expired. Check the payment status before creating a new checkout." : terminal ? "This payment is not complete. If you already sent funds, contact billing support before trying again." : "We’re checking your payment. You can keep this page open; Pro will activate here once payment is complete."}
         </div>}

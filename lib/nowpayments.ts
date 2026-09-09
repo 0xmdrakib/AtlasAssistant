@@ -4,6 +4,13 @@ import { PaymentError, type PaymentCurrency, type PaymentMinimum, type PaymentRa
 
 export type ProviderPayment = Record<string, unknown>;
 const BASE_URL = "https://api.nowpayments.io/v1";
+// Both the minimum check and payment creation must use the same rate policy.
+// NOWPayments requires fixed-rate when it collects processing fees from buyers.
+export const CHECKOUT_RATE_MODE: PaymentRateMode = "floating-merchant";
+
+function rateOptions(mode: PaymentRateMode) {
+  return { is_fixed_rate: mode !== "floating-merchant", is_fee_paid_by_user: mode === "fixed-user" };
+}
 
 export async function nowpaymentsRequest(path: string, body?: Record<string, unknown>, revalidate = 0): Promise<any> {
   const key = process.env.NOWPAYMENTS_API_KEY;
@@ -86,7 +93,7 @@ export function getPaymentCurrencies(): Promise<PaymentCurrency[]> {
 const minimumCache = new Map<string, { value: PaymentMinimum; until: number }>();
 const minimumRequests = new Map<string, Promise<PaymentMinimum>>();
 
-export function getPaymentMinimum(code: string, mode: PaymentRateMode = "fixed-user"): Promise<PaymentMinimum> {
+export function getPaymentMinimum(code: string, mode: PaymentRateMode = CHECKOUT_RATE_MODE): Promise<PaymentMinimum> {
   const currency = subscriptionPrice().currency;
   const key = `${code}:${currency}:${mode}`;
   const cached = minimumCache.get(key);
@@ -97,7 +104,8 @@ export function getPaymentMinimum(code: string, mode: PaymentRateMode = "fixed-u
     if (!(await getPaymentCurrencies()).some((row) => row.code === code)) throw new PaymentError("INVALID_NETWORK", "Choose an available payment network.");
     // Omitting currency_to lets NOWPayments use this merchant's configured
     // outcome wallet and routing, exactly as POST /payment does.
-    const params = new URLSearchParams({ currency_from: code, fiat_equivalent: currency, is_fixed_rate: String(mode !== "floating-merchant"), is_fee_paid_by_user: String(mode === "fixed-user") });
+    const rate = rateOptions(mode);
+    const params = new URLSearchParams({ currency_from: code, fiat_equivalent: currency, is_fixed_rate: String(rate.is_fixed_rate), is_fee_paid_by_user: String(rate.is_fee_paid_by_user) });
     const data = await nowpaymentsRequest(`/min-amount?${params}`, undefined, 60);
     let minimum = Number(data.fiat_equivalent);
     if (!(Number.isFinite(minimum) && minimum > 0) && Number(data.min_amount) > 0) {
@@ -105,7 +113,10 @@ export function getPaymentMinimum(code: string, mode: PaymentRateMode = "fixed-u
       minimum = Number(estimate.estimated_amount);
     }
     if (!Number.isFinite(minimum) || minimum <= 0) throw new PaymentError("MINIMUM_UNAVAILABLE", "Unable to check this network’s minimum. Please try again.", 503);
-    const value = { code, minimum, currency, ...(typeof data.currency_to === "string" ? { settlementCurrency: data.currency_to } : {}) };
+    // The provider can return the literal string "false" when no target was
+    // supplied. That is not an identified settlement currency.
+    const settlement = typeof data.currency_to === "string" ? data.currency_to.toLowerCase() : "";
+    const value = { code, minimum, currency, ...(settlement && !["false", "null", "undefined"].includes(settlement) ? { settlementCurrency: settlement } : {}) };
     minimumCache.set(key, { value, until: Date.now() + 60000 });
     return value;
   })().finally(() => minimumRequests.delete(key));
@@ -146,7 +157,7 @@ export function createNowpaymentsPayment(args: { orderId: string; amount: string
     order_id: args.orderId,
     order_description: args.discountCode ? `Atlas Assistant Pro · 1 month · ${args.discountCode}` : "Atlas Assistant Pro · 1 month",
     ipn_callback_url: `${appUrl()}/api/webhooks/nowpayments`,
-    is_fixed_rate: true, is_fee_paid_by_user: true,
+    ...rateOptions(CHECKOUT_RATE_MODE),
   });
 }
 

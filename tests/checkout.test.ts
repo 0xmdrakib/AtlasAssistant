@@ -26,14 +26,19 @@ before(() => {
     assert.equal(new Headers(init?.headers).get("x-api-key"), "local-test-only");
     if (url.endsWith("/merchant/coins")) return Response.json({ selectedCurrencies: ["usdcbsc", "usdttrc20", "btc"] });
     if (url.endsWith("/full-currencies")) return Response.json({ currencies: ["usdcbsc", "usdttrc20", "btc", "usdterc20"] });
-    if (url.includes("/min-amount?")) return Response.json({ min_amount: 1, fiat_equivalent: 1 });
+    if (url.includes("/min-amount?")) {
+      const params = new URL(url).searchParams;
+      assert.equal(params.get("is_fixed_rate"), "false");
+      assert.equal(params.get("is_fee_paid_by_user"), "false");
+      return Response.json({ min_amount: 1, fiat_equivalent: 1 });
+    }
     if (url.endsWith("/payment") && init?.method === "POST") {
       providerCreates++;
       if (failNextCreate) { failNextCreate = false; return Response.json({ message: "temporary error" }, { status: 503 }); }
       const body = JSON.parse(String(init.body));
       assert.equal(body.price_currency, "usd");
-      assert.equal(body.is_fixed_rate, true);
-      assert.equal(body.is_fee_paid_by_user, true);
+      assert.equal(body.is_fixed_rate, false);
+      assert.equal(body.is_fee_paid_by_user, false);
       assert.ok(!body.success_url && !body.invoice_url, "Native checkout must not create a redirect invoice");
       const id = `${providerCreates}`;
       const payload = { ...body, payment_id: id, payment_status: "waiting", pay_amount: String(body.price_amount), pay_address: `test-address-${id}`, actually_paid: "0", payin_extra_id: "123", expiration_estimate_date: new Date(Date.now() + 900000).toISOString() };
