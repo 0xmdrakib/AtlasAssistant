@@ -1,6 +1,6 @@
 import { applyPaymentUpdate } from "@/lib/checkout";
 import { verifyNowpaymentsSignature } from "@/lib/nowpayments";
-import { billingError, billingResponse } from "@/lib/billing-api";
+import { billingError, billingResponse } from "@/lib/billing-response";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

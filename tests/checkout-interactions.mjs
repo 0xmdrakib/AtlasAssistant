@@ -113,8 +113,9 @@ try {
   await page.getByText('Partial payment received', { exact: true }).waitFor();
   assert.equal(await page.getByRole('img', { name: 'Payment address QR code' }).count(), 0, 'Partial payment must not ask the user to send the full amount again');
   current = { ...current, status: 'finished', activatedAt: new Date().toISOString() }; paid = true;
-  await page.getByRole('button', { name: 'Check payment status' }).click();
-  await page.getByRole('heading', { name: 'Payment complete', exact: true }).waitFor();
+  const callsBeforeAutomaticCompletion = statusCalls;
+  await page.getByRole('heading', { name: 'Payment complete', exact: true }).waitFor({ timeout: 12000 });
+  assert.ok(statusCalls > callsBeforeAutomaticCompletion, 'Polling completes checkout automatically without clicking Check payment status');
   assert.equal(creates, 1); assert.deepEqual(externalNavigations, []);
   await page.screenshot({ path: 'output/checkout/success-mobile.png', fullPage: true });
 
@@ -145,7 +146,7 @@ try {
   await page.getByRole('heading', { name: 'Payment complete', exact: true }).waitFor();
   assert.equal(freeCreates, 1); assert.equal(creates, 1, '100% discount needs no provider payment or network');
   assert.deepEqual(pageErrors, []);
-  console.log('PASS: Saved-page limits panel links to pricing; explicit network selection; embedded QR/address/memo; clipboard; no redirect; single create; resume after reload; network failure recovery; confirmed/partial/expired/finished states; 100% discount without provider; mobile layout; no page errors.');
+  console.log('PASS: Saved-page limits panel links to pricing; explicit network selection; embedded QR/address/memo; clipboard; no redirect; single create; resume after reload; network failure recovery; automatic completion without clicking; confirmed/partial/expired/finished states; 100% discount without provider; mobile layout; no page errors.');
 
   const guest = await browser.newContext();
   await guest.route('**/api/**', (route) => json(route, new URL(route.request().url()).pathname === '/api/auth/session' ? {} : { ok: true }));

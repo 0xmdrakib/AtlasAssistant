@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CHECKOUT_RATE_MODE, getPaymentMinimum } from "@/lib/nowpayments";
-import { billingError } from "@/lib/billing-api";
+import { billingError } from "@/lib/billing-response";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

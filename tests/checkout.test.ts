@@ -13,6 +13,9 @@ process.env.NOWPAYMENTS_PRICE_AMOUNT = "2.99"; process.env.NOWPAYMENTS_PRICE_CUR
 const { prisma } = await import("../lib/prisma");
 const { beginCheckout, applyPaymentUpdate, readPayment } = await import("../lib/checkout");
 const { canonicalJson, stablecoinOptions, verifyNowpaymentsSignature } = await import("../lib/nowpayments");
+const { POST: receiveWebhook } = await import("../app/api/webhooks/nowpayments/route");
+const { addOneMonth, getBillingStatus, planForSubscription } = await import("../lib/billing");
+const { getSavedItems } = await import("../lib/saved-items");
 const prefix = `checkout-test-${randomUUID()}`;
 const users: string[] = [], codes: string[] = [];
 const provider = new Map<string, any>();
@@ -126,6 +129,33 @@ test("polling reconciles a missed webhook using provider data, never client succ
   provider.set(finished.payment_id, finished);
   const result = await readPayment(userId, payment.id);
   assert.equal(result.status, "finished"); assert.ok(result.activatedAt);
+});
+
+test("signed webhooks activate a month of Pro and paid limits with no browser session", async () => {
+  const userId = await user(); const payment = await checkout(userId);
+  const finished = { ...await payload(payment.id, "finished"), outcome_amount: 2.9, outcome_currency: "usdcbsc", fee: { serviceFee: 0.03, depositFee: 0.06 } };
+  const notify = (body: any, signature?: string) => receiveWebhook(new Request("https://atlas.example/api/webhooks/nowpayments", {
+    method: "POST", headers: { "Content-Type": "application/json", "x-nowpayments-sig": signature ?? createHmac("sha512", process.env.NOWPAYMENTS_IPN_SECRET!).update(canonicalJson(body)).digest("hex") },
+    body: JSON.stringify(body),
+  }));
+  // No session cookie, open page, or client poll participates in fulfillment.
+  assert.equal((await notify(finished, "0".repeat(128))).status, 401);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).subscriptionPlan, "free");
+  assert.equal((await notify({ ...finished, payment_status: "partially_paid", actually_paid: 1 })).status, 200);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).subscriptionPlan, "free");
+  // Merchant processing fees reduce the payout, not the amount the buyer sent.
+  assert.equal((await notify(finished)).status, 200);
+  const activatedUser = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  assert.equal(activatedUser.subscriptionStatus, "active");
+  assert.equal(activatedUser.subscriptionProvider, "nowpayments");
+  assert.equal(activatedUser.subscriptionCurrentPeriodEnd!.toISOString(), addOneMonth(activatedUser.subscriptionCurrentPeriodStart!).toISOString());
+  const status = await getBillingStatus(userId);
+  assert.equal(status.plan, "paid");
+  assert.deepEqual(status.limits, { summary: 20, digest: 10, paidTranslationLanguages: 2 });
+  assert.equal((await getSavedItems(userId)).limit, 50);
+  assert.equal((await notify(finished)).status, 200);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).subscriptionCurrentPeriodEnd!.toISOString(), activatedUser.subscriptionCurrentPeriodEnd!.toISOString());
+  assert.equal(planForSubscription(activatedUser, activatedUser.subscriptionCurrentPeriodEnd!).plan, "free", "Access expires automatically at the period boundary");
 });
 
 test("discount cap is atomic across users, failure releases a pending claim, and free activation is idempotent", async () => {

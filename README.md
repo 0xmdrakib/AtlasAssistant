@@ -44,6 +44,14 @@ Saved interaction checks:
 - `npm run test:saved-ui-state` checks optimistic updates and rollback.
 - `npm run test:saved-interactions` uses Playwright and a running production build at `http://127.0.0.1:3000` (override with `UI_TEST_BASE`). It intercepts all API calls with isolated fixtures to test slow responses, failed saves and speech controls without account or database changes. Provide a Playwright installation as the `playwright` package or set `PLAYWRIGHT_MODULE` to its module URL. Chrome must be available.
 
+### Automatic payment activation
+- Each NOWPayments checkout supplies `/api/webhooks/nowpayments` as its callback URL. Set the matching `NOWPAYMENTS_IPN_SECRET` in production and in the merchant account.
+- A verified, fully paid `finished` notification activates Pro and adds one calendar month automatically, even when the browser is closed. Repeated notifications cannot grant the same month twice.
+- Processing fees deducted from merchant proceeds do not count as buyer underpayment. Partial payments remain pending and do not grant Pro.
+- An open checkout checks status every 8 seconds and refreshes account and saved-post limits after activation. Returning to an existing checkout can recover a missed webhook through the provider status API.
+- Pro includes 50 saves, 20 item summaries per day, 10 digests per day and 2 translation languages per paid period. Access returns to Free when the paid period ends; there is no automatic charge.
+- `npm run test:checkout` uses an isolated PostgreSQL database to verify signed webhook fulfillment, paid limits, expiry and duplicate callbacks without a browser session. `npm run test:checkout-ui` verifies the success screen appears without clicking the status button.
+
 ### Database deployment
 The existing database is managed with `npm run db:migrate` (Prisma db push).
 Vercel runs `npm run db:migrate:saved` before the application build to apply the
